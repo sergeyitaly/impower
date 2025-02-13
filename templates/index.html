@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM Migration</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Migrate User Data</h1>
+        <button id="migrateBtn">Migrate</button>
+        <div id="message"></div>
+    </div>
+
+    <script>
+        document.getElementById("migrateBtn").addEventListener("click", async () => {
+            try {
+                // Assuming user_id is 1 for this example. Replace it with actual user ID.
+                const user_id = 1;
+
+                const response = await fetch("/migrate", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        user_id: user_id,
+                    }),
+                });
+
+                const data = await response.json();
+
+                document.getElementById("message").innerHTML = `
+                    <h3>Migration Status:</h3>
+                    <p><strong>Copy to Staging DB:</strong> ${data.staging_status}</p>
+                    <p><strong>Copy to CRM:</strong> ${data.crm_status}</p>
+                    <p><strong>CRM Entity Updated:</strong> ${data.crm_entity_updated ? "Yes" : "No"}</p>
+                `;
+            } catch (error) {
+                console.error("Error:", error);
+                document.getElementById("message").innerHTML = "An error occurred during migration.";
+            }
+        });
+    </script>
+</body>
+</html>
