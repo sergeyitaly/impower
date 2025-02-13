@@ -50,7 +50,6 @@ headers = {
     "Content-Type": "application/json"
 }
 
-
 # SQLAlchemy Setup for Staging DB
 DATABASE_URL = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 engine = create_engine(DATABASE_URL)
@@ -137,7 +136,7 @@ def upsert_into_postgresql(table_name: str, data: dict, unique_column: str):
 # Function to migrate user data to CRM opportunity customer entity
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
-    crm_url = f"{CRM_URL}opportunitycustomers"
+    crm_url = f"{CRM_URL}/opportunitycustomers"
     
     crm_data = {
         "name": user_data['name'],
@@ -153,9 +152,10 @@ def migrate_to_crm(user_data: dict):
     }, data=json.dumps(crm_data))
 
     if response.status_code == 201:
-        print(f"Successfully migrated user {user_data['name']} to CRM")
+        return True
     else:
         print(f"Failed to migrate user {user_data['name']} to CRM. Status code: {response.status_code}")
+        return False
 
 # Function to get CRM access token
 def get_crm_access_token():
@@ -199,6 +199,23 @@ def get_user_from_db(user_id: int):
             return None
     finally:
         db.close()
+
+# FastAPI route to anonymize user data
+@app.get("/anonymize/{user_id}")
+async def anonymize_user(user_id: int):
+    # Fetch user data from the database
+    user_data = get_user_from_db(user_id)
+    
+    if not user_data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Anonymize the user data
+    anonymized_data = anonymize_user_data(user_data)
+
+    if anonymized_data:
+        return {"success": True}
+    else:
+        return {"success": False}
 
 @app.post("/migrate")
 async def migrate(user_id: int, background_tasks: BackgroundTasks):

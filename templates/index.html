@@ -12,10 +12,16 @@
 
         <button id="migrateBtn">Migrate</button>
 
-        <!-- New section to display anonymized data -->
-        <div id="anonymizedData">
-            <h3>Anonymized User Data:</h3>
-            <pre id="anonymizedDataContent"></pre>
+        <!-- Section to display anonymization status -->
+        <div id="anonymizationStatus">
+            <h3>Anonymization Status:</h3>
+            <p id="anonymizationMessage">User data is not yet anonymized.</p>
+        </div>
+
+        <!-- Section to display migration status -->
+        <div id="migrationStatus">
+            <h3>Migration Status:</h3>
+            <p id="migrationMessage">Migration not started.</p>
         </div>
 
         <div id="message"></div>
@@ -27,15 +33,24 @@
                 // Assuming user_id is 1 for this example. Replace it with actual user ID.
                 const user_id = 1;
 
-                // Fetch anonymized data first
-                const anonymizedResponse = await fetch(`/anonymize/${user_id}`);
-                const anonymizedData = await anonymizedResponse.json();
+                // Mark anonymization as in progress
+                document.getElementById("anonymizationMessage").textContent = "Anonymizing user data...";
 
-                // Display anonymized data on the page
-                const anonymizedContent = document.getElementById("anonymizedDataContent");
-                anonymizedContent.textContent = JSON.stringify(anonymizedData, null, 2);
+                // Fetch anonymization status (assuming a backend API for anonymization process)
+                const anonymizeResponse = await fetch(`/anonymize/${user_id}`);
+                const anonymizedData = await anonymizeResponse.json();
 
-                // Perform migration after displaying anonymized data
+                // Check if anonymization was successful
+                if (anonymizedData.success) {
+                    document.getElementById("anonymizationMessage").textContent = "User data anonymized successfully.";
+                } else {
+                    document.getElementById("anonymizationMessage").textContent = "Anonymization failed.";
+                    return;
+                }
+
+                // Now perform migration
+                document.getElementById("migrationMessage").textContent = "Starting migration...";
+
                 const response = await fetch("/migrate", {
                     method: "POST",
                     headers: {
@@ -49,15 +64,24 @@
                 const data = await response.json();
 
                 // Display migration status
-                document.getElementById("message").innerHTML = `
-                    <h3>Migration Status:</h3>
-                    <p><strong>Copy to Staging DB:</strong> ${data.staging_status}</p>
-                    <p><strong>Copy to CRM:</strong> ${data.crm_status}</p>
-                    <p><strong>CRM Entity Updated:</strong> ${data.crm_entity_updated ? "Yes" : "No"}</p>
-                `;
+                if (data.staging_status === "Success" && data.crm_status === "Success") {
+                    document.getElementById("migrationMessage").innerHTML = `
+                        <p><strong>Migration Status:</strong> Success</p>
+                        <p><strong>Data copied to Staging DB:</strong> Yes</p>
+                        <p><strong>Data copied to CRM:</strong> Yes</p>
+                        <p><strong>CRM Entity Updated:</strong> Yes</p>
+                    `;
+                } else {
+                    document.getElementById("migrationMessage").innerHTML = `
+                        <p><strong>Migration Status:</strong> Failed</p>
+                        <p><strong>Error:</strong> ${data.error || "Unknown error"}</p>
+                    `;
+                }
             } catch (error) {
                 console.error("Error:", error);
                 document.getElementById("message").innerHTML = "An error occurred during migration.";
+                document.getElementById("anonymizationMessage").textContent = "An error occurred during anonymization.";
+                document.getElementById("migrationMessage").textContent = "An error occurred during migration.";
             }
         });
     </script>
