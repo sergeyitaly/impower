@@ -9,7 +9,15 @@
 <body>
     <div class="container">
         <h1>Migrate User Data</h1>
+
         <button id="migrateBtn">Migrate</button>
+
+        <!-- New section to display anonymized data -->
+        <div id="anonymizedData">
+            <h3>Anonymized User Data:</h3>
+            <pre id="anonymizedDataContent"></pre>
+        </div>
+
         <div id="message"></div>
     </div>
 
@@ -19,6 +27,15 @@
                 // Assuming user_id is 1 for this example. Replace it with actual user ID.
                 const user_id = 1;
 
+                // Fetch anonymized data first
+                const anonymizedResponse = await fetch(`/anonymize/${user_id}`);
+                const anonymizedData = await anonymizedResponse.json();
+
+                // Display anonymized data on the page
+                const anonymizedContent = document.getElementById("anonymizedDataContent");
+                anonymizedContent.textContent = JSON.stringify(anonymizedData, null, 2);
+
+                // Perform migration after displaying anonymized data
                 const response = await fetch("/migrate", {
                     method: "POST",
                     headers: {
@@ -31,6 +48,7 @@
 
                 const data = await response.json();
 
+                // Display migration status
                 document.getElementById("message").innerHTML = `
                     <h3>Migration Status:</h3>
                     <p><strong>Copy to Staging DB:</strong> ${data.staging_status}</p>

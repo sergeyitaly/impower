@@ -208,9 +208,12 @@ async def migrate(user_id: int, background_tasks: BackgroundTasks):
     if not user_data:
         raise HTTPException(status_code=404, detail="User not found in staging database")
 
+    # Anonymize user data before migration
+    anonymized_data = anonymize_user_data(user_data)
+
     # Simulate migration steps
     staging_status = "Success"  # Assuming we always copy to staging DB
-    crm_status = "Success" if migrate_to_crm(user_data) else "Failed"
+    crm_status = "Success" if migrate_to_crm(anonymized_data) else "Failed"
     crm_entity_updated = True if crm_status == "Success" else False
 
     return JSONResponse({
