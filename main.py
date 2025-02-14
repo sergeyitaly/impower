@@ -27,7 +27,7 @@ PASSWORD = os.getenv("PASSWORD")
 HOST = os.getenv("HOST")
 PORT = os.getenv("PORT")
 DBNAME = os.getenv("DBNAME")
-API_URL = "https://api.facilio.com"
+API_URL = "https://app.facilioo.de"
 FACILIO_EMAIL = os.getenv("FACILIO_EMAIL")
 FACILIO_PASSWORD = os.getenv("FACILIO_PASSWORD")
 
