@@ -257,7 +257,7 @@ def fetch_users(access_token: str, offset: int, limit: int):
     
     try:
         # Fetch users from the external API
-        response = requests.get(f"{API_URL}/source/getUsers?offset={offset}&limit={limit}", headers=headers)
+        response = requests.get(f"{API_URL}/api/source/getUsers?offset={offset}&limit={limit}", headers=headers)
         logger.info(f"Fetching users: {response.status_code}, {response.text}")  # Debugging
 
         if response.status_code == 200:
