@@ -120,8 +120,9 @@ def authenticate_by_email(email: str, password: str, two_factor_code: str = None
     try:
         response = requests.post(f"{API_URL}/user/authenticateByMail", headers=headers, json=payload)
         
-        # Log the API response for debugging
-        logger.info(f"API response: {response.status_code}, {response.text}")
+        # Log the raw response for debugging
+        logger.info(f"API response status: {response.status_code}")
+        logger.info(f"API response text: {response.text}")
         
         if response.status_code == 200:
             auth_data = response.json()
@@ -172,8 +173,8 @@ def authenticate_by_email(email: str, password: str, two_factor_code: str = None
             crm_entity_updated=False,
             error_message=error_message
         )
-        raise HTTPException(status_code=500, detail=error_message)    
-
+        raise HTTPException(status_code=500, detail=error_message)
+    
 def save_users_to_staging(users: list):
     db = SessionLocal()
     try:
@@ -412,51 +413,57 @@ def get_crm_access_token():
     token_data = response.json()
     return token_data['access_token']
 
+
 @app.post("/authenticate")
 async def authenticate(request: AuthRequest):
     logger.info(f"Authentication attempt for email: {request.email}")
     
-    # Authenticate by email and password
-    auth_response = authenticate_by_email(request.email, request.password, request.twoFactorCode)
+    try:
+        # Authenticate by email and password
+        auth_response = authenticate_by_email(request.email, request.password, request.twoFactorCode)
+        
+        if auth_response.get("success"):
+            # If authentication is successful, return tokens
+            access_token = auth_response["accessToken"]
+            refresh_token = auth_response.get("refreshToken")  # Ensure this is included in the response
+            
+            logger.info(f"Authentication successful for email: {request.email}, Access Token: {access_token}")
+            
+            # Log successful authentication
+            log_migration_result(
+                user_id=-1,  # Use -1 for system-level logs
+                staging_status="authentication_success",
+                crm_status="not_updated",
+                crm_entity_updated=False,
+                error_message=None
+            )
+            
+            # Return both tokens
+            return {"access_token": access_token, "refresh_token": refresh_token}
+        
+        elif auth_response.get("twoFactorRequired"):
+            # If 2FA is required, return a response indicating that
+            logger.info(f"2FA required for email: {request.email}")
+            return {"twoFactorRequired": True, "message": "2FA code required"}
+        
+        else:
+            # If authentication fails, log and raise an error
+            logger.warning(f"Authentication failed for email: {request.email}")
+            
+            # Log failed authentication
+            log_migration_result(
+                user_id=-1,  # Use -1 for system-level logs
+                staging_status="authentication_failed",
+                crm_status="not_updated",
+                crm_entity_updated=False,
+                error_message=auth_response.get("message", "Unknown error")
+            )
+            
+            raise HTTPException(status_code=401, detail=auth_response.get("message", "Authentication failed"))
     
-    if auth_response.get("success"):
-        # If authentication is successful, return tokens
-        access_token = auth_response["accessToken"]
-        refresh_token = auth_response.get("refreshToken")  # Ensure this is included in the response
-        
-        logger.info(f"Authentication successful for email: {request.email}, Access Token: {access_token}")
-        
-        # Log successful authentication
-        log_migration_result(
-            user_id=-1,  # Use -1 for system-level logs
-            staging_status="authentication_success",
-            crm_status="not_updated",
-            crm_entity_updated=False,
-            error_message=None
-        )
-        
-        # Return both tokens
-        return {"access_token": access_token, "refresh_token": refresh_token}
-    
-    elif auth_response.get("twoFactorRequired"):
-        # If 2FA is required, return a response indicating that
-        logger.info(f"2FA required for email: {request.email}")
-        return {"twoFactorRequired": True, "message": "2FA code required"}
-    
-    else:
-        # If authentication fails, log and raise an error
-        logger.warning(f"Authentication failed for email: {request.email}")
-        
-        # Log failed authentication
-        log_migration_result(
-            user_id=-1,  # Use -1 for system-level logs
-            staging_status="authentication_failed",
-            crm_status="not_updated",
-            crm_entity_updated=False,
-            error_message=auth_response.get("message", "Unknown error")
-        )
-        
-        raise HTTPException(status_code=401, detail=auth_response.get("message", "Authentication failed"))
+    except Exception as e:
+        logger.error(f"Error during authentication: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
     
 # Function to fetch user data from the staging DB
 def get_user_from_db(user_id: int):
