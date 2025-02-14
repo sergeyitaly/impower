@@ -133,7 +133,7 @@ def authenticate_by_email(email: str, password: str, two_factor_code: str = None
             
             # Proceed if no 2FA is required or 2FA code is provided
             access_token = auth_data.get("accessToken")
-            refresh_token = auth_data.get("refreshToken")
+            #refresh_token = auth_data.get("refreshToken")
             
             if not access_token:
                 error_message = "Access token missing in response"
@@ -149,7 +149,7 @@ def authenticate_by_email(email: str, password: str, two_factor_code: str = None
             return {
                 "success": True,
                 "accessToken": access_token,
-                "refreshToken": refresh_token
+                #"refreshToken": refresh_token
             }
 
         else:
@@ -425,7 +425,7 @@ async def authenticate(request: AuthRequest):
         if auth_response.get("success"):
             # If authentication is successful, return tokens
             access_token = auth_response["accessToken"]
-            refresh_token = auth_response.get("refreshToken")  # Ensure this is included in the response
+            #refresh_token = auth_response.get("refreshToken")  # Ensure this is included in the response
             
             logger.info(f"Authentication successful for email: {request.email}, Access Token: {access_token}")
             
@@ -439,7 +439,7 @@ async def authenticate(request: AuthRequest):
             )
             
             # Return both tokens
-            return {"access_token": access_token, "refresh_token": refresh_token}
+            return {"access_token": access_token}
         
         elif auth_response.get("twoFactorRequired"):
             # If 2FA is required, return a response indicating that
