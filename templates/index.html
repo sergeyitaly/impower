@@ -5,83 +5,165 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CRM Migration</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
         <h1>Migrate User Data</h1>
 
-        <button id="migrateBtn">Migrate</button>
+        <!-- Migration Button -->
+        <button id="migrateBtn" class="btn">
+            <i class="fas fa-sync-alt"></i> Start Migration
+        </button>
 
-        <!-- Section to display anonymization status -->
-        <div id="anonymizationStatus">
-            <h3>Anonymization Status:</h3>
-            <p id="anonymizationMessage">User data is not yet anonymized.</p>
+        <!-- Progress Bars -->
+        <div class="progress-container">
+            <h3>Migration Progress</h3>
+            <div class="progress-bar">
+                <div id="anonymizationProgress" class="progress"></div>
+            </div>
+            <p id="anonymizationMessage">Anonymization: Not Started</p>
+
+            <div class="progress-bar">
+                <div id="migrationProgress" class="progress"></div>
+            </div>
+            <p id="migrationMessage">Migration: Not Started</p>
         </div>
 
-        <!-- Section to display migration status -->
-        <div id="migrationStatus">
-            <h3>Migration Status:</h3>
-            <p id="migrationMessage">Migration not started.</p>
+        <!-- Status Cards -->
+        <div class="status-cards">
+            <div class="card" id="anonymizationStatus">
+                <h3><i class="fas fa-user-shield"></i> Anonymization Status</h3>
+                <p id="anonymizationStatusMessage">Pending</p>
+            </div>
+            <div class="card" id="migrationStatus">
+                <h3><i class="fas fa-database"></i> Migration Status</h3>
+                <p id="migrationStatusMessage">Pending</p>
+            </div>
         </div>
 
-        <div id="message"></div>
+        <!-- Logs Section -->
+        <div class="logs">
+            <h3><i class="fas fa-clipboard-list"></i> Logs</h3>
+            <div id="logsContainer"></div>
+        </div>
     </div>
 
     <script>
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/migration-logs');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch logs');
+                }
+                const data = await response.json();
+                const logsContainer = document.getElementById('logsContainer');
+                logsContainer.innerHTML = '';
+                data.logs.forEach(log => {
+                    const logElement = document.createElement('div');
+                    logElement.classList.add('log-entry');
+                    logElement.innerHTML = `
+                        <strong>User ID:</strong> ${log.user_id} <br>
+                        <strong>Staging Status:</strong> ${log.staging_status} <br>
+                        <strong>CRM Status:</strong> ${log.crm_status} <br>
+                        <strong>Time:</strong> ${log.created_at} <br>
+                    `;
+                    logsContainer.appendChild(logElement);
+                });
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+                const logsContainer = document.getElementById('logsContainer');
+                logsContainer.innerHTML = `<p><i class="fas fa-times-circle"></i> Error fetching logs: ${error.message}</p>`;
+            }
+        }
+        // Initially load logs
+        fetchLogs();
+        async function anonymizeUser(user_id) {
+            const response = await fetch(`/anonymize/${user_id}`);
+            return await response.json();
+        }
+        
+        async function migrateUser(user_id) {
+            const response = await fetch("/migrate", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    user_id: user_id,
+                }),
+            });
+            return await response.json();
+        }
         document.getElementById("migrateBtn").addEventListener("click", async () => {
             try {
-                // Assuming user_id is 1 for this example. Replace it with actual user ID.
-                const user_id = 1;
-
-                // Mark anonymization as in progress
-                document.getElementById("anonymizationMessage").textContent = "Anonymizing user data...";
-
-                // Fetch anonymization status (assuming a backend API for anonymization process)
-                const anonymizeResponse = await fetch(`/anonymize/${user_id}`);
-                const anonymizedData = await anonymizeResponse.json();
-
-                // Check if anonymization was successful
+                const user_id = 1; // Replace with actual user ID
+                const logsContainer = document.getElementById("logsContainer");
+        
+                // Reset progress and logs
+                logsContainer.innerHTML = "";
+                document.getElementById("anonymizationProgress").style.width = "0%";
+                document.getElementById("migrationProgress").style.width = "0%";
+                document.getElementById("anonymizationStatusMessage").textContent = "Pending";
+                document.getElementById("migrationStatusMessage").textContent = "Pending";
+        
+                // Fetch and display existing logs
+                await fetchLogs();
+        
+                // Anonymization
+                document.getElementById("anonymizationMessage").textContent = "Anonymization: In Progress";
+                document.getElementById("anonymizationProgress").style.width = "50%";
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Anonymizing user data...</p>`;
+        
+                const anonymizedData = await anonymizeUser(user_id);
+        
                 if (anonymizedData.success) {
-                    document.getElementById("anonymizationMessage").textContent = "User data anonymized successfully.";
+                    document.getElementById("anonymizationMessage").textContent = "Anonymization: Complete";
+                    document.getElementById("anonymizationProgress").style.width = "100%";
+                    document.getElementById("anonymizationStatusMessage").textContent = "Complete";
+                    logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> User data anonymized successfully.</p>`;
                 } else {
-                    document.getElementById("anonymizationMessage").textContent = "Anonymization failed.";
+                    document.getElementById("anonymizationMessage").textContent = "Anonymization: Failed";
+                    document.getElementById("anonymizationProgress").style.width = "100%";
+                    document.getElementById("anonymizationStatusMessage").textContent = "Failed";
+                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Anonymization failed: ${anonymizedData.error || "Unknown error"}</p>`;
                     return;
                 }
-
-                // Now perform migration
-                document.getElementById("migrationMessage").textContent = "Starting migration...";
-
-                const response = await fetch("/migrate", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        user_id: user_id,
-                    }),
-                });
-
-                const data = await response.json();
-
-                // Display migration status
-                if (data.staging_status === "Success" && data.crm_status === "Success") {
-                    document.getElementById("migrationMessage").innerHTML = `
-                        <p><strong>Migration Status:</strong> Success</p>
-                        <p><strong>Data copied to Staging DB:</strong> Yes</p>
-                        <p><strong>Data copied to CRM:</strong> Yes</p>
-                        <p><strong>CRM Entity Updated:</strong> Yes</p>
-                    `;
+        
+                // Migration
+                document.getElementById("migrationMessage").textContent = "Migration: In Progress";
+                document.getElementById("migrationProgress").style.width = "50%";
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration...</p>`;
+        
+                const migrationData = await migrateUser(user_id);
+        
+                if (migrationData.staging_status === "Success" && migrationData.crm_status === "Success") {
+                    document.getElementById("migrationMessage").textContent = "Migration: Complete";
+                    document.getElementById("migrationProgress").style.width = "100%";
+                    document.getElementById("migrationStatusMessage").textContent = "Complete";
+        
+                    if (migrationData.action === "insert") {
+                        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Migration successful: <strong>New user data added</strong>.</p>`;
+                    } else if (migrationData.action === "update") {
+                        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Migration successful: <strong>Existing user data updated</strong>.</p>`;
+                    } else {
+                        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Migration successful.</p>`;
+                    }
                 } else {
-                    document.getElementById("migrationMessage").innerHTML = `
-                        <p><strong>Migration Status:</strong> Failed</p>
-                        <p><strong>Error:</strong> ${data.error || "Unknown error"}</p>
-                    `;
+                    document.getElementById("migrationMessage").textContent = "Migration: Failed";
+                    document.getElementById("migrationProgress").style.width = "100%";
+                    document.getElementById("migrationStatusMessage").textContent = "Failed";
+                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Migration failed: ${migrationData.error || "Unknown error"}</p>`;
                 }
+        
+                // Fetch and display updated logs after migration
+                await fetchLogs();
             } catch (error) {
                 console.error("Error:", error);
-                document.getElementById("message").innerHTML = "An error occurred during migration.";
-                document.getElementById("anonymizationMessage").textContent = "An error occurred during anonymization.";
-                document.getElementById("migrationMessage").textContent = "An error occurred during migration.";
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration.</p>`;
+                document.getElementById("anonymizationMessage").textContent = "Anonymization: Error";
+                document.getElementById("migrationMessage").textContent = "Migration: Error";
             }
         });
     </script>

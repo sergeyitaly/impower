@@ -15,6 +15,8 @@ from sqlalchemy.orm import sessionmaker
 from models import User  # Ensure models.py is in the same directory
 from sqlalchemy import create_engine
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
+
 
 # Load environment variables
 load_dotenv()
@@ -200,44 +202,148 @@ def get_user_from_db(user_id: int):
     finally:
         db.close()
 
-# FastAPI route to anonymize user data
 @app.get("/anonymize/{user_id}")
 async def anonymize_user(user_id: int):
-    # Fetch user data from the database
-    user_data = get_user_from_db(user_id)
-    
-    if not user_data:
-        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        # Fetch user data from the database
+        user_data = get_user_from_db(user_id)
+        
+        if not user_data:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    # Anonymize the user data
-    anonymized_data = anonymize_user_data(user_data)
+        # Anonymize the user data
+        anonymized_data = anonymize_user_data(user_data)
 
-    if anonymized_data:
+        # Log successful anonymization
+        log_migration_result(user_id, "Success", "Not attempted", False)
         return {"success": True}
-    else:
-        return {"success": False}
+
+    except Exception as e:
+        # Log anonymization failure
+        log_migration_result(user_id, f"Failed: {str(e)}", "Not attempted", False)
+        return {"success": False, "error": str(e)}
+    
+    
+def log_migration_result(user_id: int, staging_status: str, crm_status: str, crm_entity_updated: bool):
+    try:
+        connection = psycopg2.connect(
+            user=USER,
+            password=PASSWORD,
+            host=HOST,
+            port=PORT,
+            dbname=DBNAME,
+            gssencmode='disable'
+        )
+        cursor = connection.cursor()
+
+        # Ensure table exists
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS migration_logs (
+            id SERIAL PRIMARY KEY,
+            user_id INT,
+            staging_status TEXT,
+            crm_status TEXT,
+            crm_entity_updated BOOLEAN,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        # Insert log entry
+        insert_query = """
+        INSERT INTO migration_logs (user_id, staging_status, crm_status, crm_entity_updated)
+        VALUES (%s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, staging_status, crm_status, crm_entity_updated))
+        connection.commit()
+
+    except Exception as e:
+        print(f"Error logging migration result: {e}")
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+@app.get("/migration-logs", response_class=JSONResponse)
+async def get_migration_logs():
+    try:
+        # Fetch logs from the database
+        connection = psycopg2.connect(
+            user=USER,
+            password=PASSWORD,
+            host=HOST,
+            port=PORT,
+            dbname=DBNAME,
+            gssencmode='disable'
+        )
+        cursor = connection.cursor()
+
+        # Query to fetch logs
+        cursor.execute("SELECT user_id, staging_status, crm_status, created_at FROM migration_logs ORDER BY created_at DESC")
+        logs = cursor.fetchall()
+
+        # Convert to a list of dictionaries
+        migration_logs = [
+            {
+                "user_id": log[0],
+                "staging_status": log[1],
+                "crm_status": log[2],
+                "migrated_at": log[3].isoformat()  # Convert datetime to string
+            }
+            for log in logs
+        ]
+
+        return {"logs": migration_logs}
+
+    except Exception as e:
+        print(f"Error fetching migration logs: {e}")
+        return {"logs": []}
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
 
 @app.post("/migrate")
 async def migrate(user_id: int, background_tasks: BackgroundTasks):
-    # Fetch user data from staging DB based on user ID
-    user_data = get_user_from_db(user_id)
-    
-    if not user_data:
-        raise HTTPException(status_code=404, detail="User not found in staging database")
+    try:
+        # Fetch user data from the staging DB
+        user_data = get_user_from_db(user_id)
 
-    # Anonymize user data before migration
-    anonymized_data = anonymize_user_data(user_data)
+        if not user_data:
+            raise ValueError("User not found in staging database")
 
-    # Simulate migration steps
-    staging_status = "Success"  # Assuming we always copy to staging DB
-    crm_status = "Success" if migrate_to_crm(anonymized_data) else "Failed"
-    crm_entity_updated = True if crm_status == "Success" else False
+        # Anonymize user data before migration
+        anonymized_data = anonymize_user_data(user_data)
+
+        # Simulate migration steps
+        staging_status = "Success"
+        try:
+            crm_status = "Success" if migrate_to_crm(anonymized_data) else "Failed"
+        except Exception as e:
+            crm_status = f"Failed: {str(e)}"
+
+        crm_entity_updated = crm_status == "Success"
+
+    except Exception as e:
+        # Catch any error that occurs during the migration
+        staging_status = f"Failed: {str(e)}"
+        crm_status = "Not attempted"
+        crm_entity_updated = False
+
+    finally:
+        # Ensure we always log the result, even if something goes wrong
+        log_migration_result(user_id, staging_status, crm_status, crm_entity_updated)
 
     return JSONResponse({
         "staging_status": staging_status,
         "crm_status": crm_status,
         "crm_entity_updated": crm_entity_updated
     })
+
 
 # FastAPI route to serve the index.html page
 @app.get("/", response_class=HTMLResponse)
