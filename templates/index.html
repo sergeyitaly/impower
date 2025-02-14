@@ -110,8 +110,6 @@
                 alert("Error sending 2FA code. Please try again.");
             }
         });
-
-
         document.getElementById("authenticateBtn").addEventListener("click", async () => {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
@@ -132,12 +130,22 @@
                     body: JSON.stringify({ email, password, twoFactorCode: code }),
                 });
         
-                if (!response.ok) {
-                    throw new Error("Authentication failed.");
+                // Check if the response is JSON
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    // Handle non-JSON responses
+                    const text = await response.text();
+                    throw new Error(`Unexpected response: ${text}`);
                 }
         
+                // Parse the response as JSON
                 const data = await response.json();
                 console.log("Response from /authenticate with 2FA:", data); // Debugging
+        
+                if (!response.ok) {
+                    // Handle API errors
+                    throw new Error(data.message || "Authentication failed.");
+                }
         
                 // Store the access token globally
                 accessToken = data.access_token;
@@ -147,7 +155,7 @@
                 document.getElementById("migrateBtn").style.display = "block";
             } catch (error) {
                 console.error("Error during authentication:", error);
-                alert("Authentication failed. Please try again.");
+                alert(`Authentication failed: ${error.message}`);
             }
         });
         
