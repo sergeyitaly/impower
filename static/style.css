@@ -115,37 +115,42 @@ h1, h2, h3 {
 
 .card p {
     font-size: 16px;
-    color: #555;
+    color: #7f8c8d;
 }
 
 /* Logs section */
 .logs {
-    margin-top: 20px;
-    padding: 20px;
-    background: var(--card-gradient);
-    border-radius: var(--border-radius);
+    margin-top: 30px;
+}
+
+.log-entry {
+    background-color: #f9f9f9;
+    padding: 10px;
+    margin: 5px 0;
+    border-left: 5px solid #007BFF;
+    border-radius: 8px;
     box-shadow: var(--shadow);
 }
 
-.logs p {
+.log-entry p {
     margin: 5px 0;
-    font-size: 14px;
-    color: #333;
+    color: #2c3e50;
 }
 
-.logs i {
-    margin-right: 8px;
+.log-entry .log-time {
+    font-size: 0.9em;
+    color: #95a5a6;
 }
 
-/* Log icons */
-.logs .fa-check-circle {
-    color: var(--success-color);
+.log-entry i {
+    margin-right: 5px;
 }
 
-.logs .fa-times-circle {
-    color: var(--error-color);
+/* Error/Success icons */
+.log-entry .error {
+    border-left-color: var(--error-color);
 }
 
-.logs .fa-info-circle {
-    color: var(--primary-color);
+.log-entry .success {
+    border-left-color: var(--success-color);
 }
