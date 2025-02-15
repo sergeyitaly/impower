@@ -40,6 +40,7 @@
                 <div id="fetchingProgress" class="progress"></div>
             </div>
             <p id="fetchingMessage">Fetching Users: Not Started</p>
+
             <!-- Migration Progress -->
             <div class="progress-bar">
                 <div id="migrationProgress" class="progress"></div>
@@ -65,23 +66,20 @@
             <button id="toggleLogs" class="btn">Show Logs</button>
             <div id="logsContainer" style="display: none;"></div>
         </div>
+
+        <!-- CRM Link -->
         <div id="crmLinkContainer" style="display: none;">
             <a id="crmLink" href="#">Go to CRM Contacts</a>
         </div>
-        
     </div>
 
     <script>
         let accessToken = null;
+
         document.getElementById("toggleLogs").addEventListener("click", function() {
             const logsContainer = document.getElementById("logsContainer");
-            if (logsContainer.style.display === "none") {
-                logsContainer.style.display = "block";
-                this.textContent = "Hide Logs";
-            } else {
-                logsContainer.style.display = "none";
-                this.textContent = "Show Logs";
-            }
+            logsContainer.style.display = logsContainer.style.display === "none" ? "block" : "none";
+            this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
         });
 
         document.getElementById("authenticateBtn").addEventListener("click", async () => {
@@ -102,29 +100,18 @@
                     body: JSON.stringify({ email, password }),
                 });
 
-                const contentType = response.headers.get("content-type");
-                if (!contentType || !contentType.includes("application/json")) {
-                    const text = await response.text();
-                    throw new Error(`Unexpected response: ${text}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || "Authentication failed.");
                 }
 
                 const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.message || "Authentication failed.");
-                }
-
                 accessToken = data.access_token;
                 document.getElementById("authForm").style.display = "none";
-                
-                // Show Migrate Button
                 document.getElementById("migrateBtn").style.display = "block";
-
-                // Make progress bar & status cards visible
                 document.querySelector(".progress-container").style.display = "block";
                 document.querySelector(".logs").style.display = "block";
-                document.querySelector(".status-cards").style.display = "flex"; // Ensures proper layout
-
+                document.querySelector(".status-cards").style.display = "flex";
             } catch (error) {
                 console.error("Error during authentication:", error);
                 alert(`Authentication failed: ${error.message}`);
@@ -155,23 +142,22 @@
         }
 
         document.getElementById("migrateBtn").addEventListener("click", async () => {
+            const logsContainer = document.getElementById("logsContainer");
+            logsContainer.innerHTML = "";
+            logsContainer.style.display = "block";
+
+            resetProgressBars();
+
             try {
-                const logsContainer = document.getElementById("logsContainer");
-                logsContainer.innerHTML = "";
-                resetProgressBars();
-
-                // Fetch and display existing logs
-                //await fetchLogs();
-
-                // Fetch and save users from Facil.io to staging DB
+                // Fetch and save users
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving users to staging...</p>`;
                 document.getElementById("fetchingMessage").textContent = "Fetching users...";
-                document.getElementById("fetchingProgress").style.width = "50%"; // Update progress bar
+                document.getElementById("fetchingProgress").style.width = "50%";
 
                 const fetchAndSaveData = await fetchAndSaveUsers(accessToken);
 
                 if (fetchAndSaveData.success) {
-                    document.getElementById("fetchingProgress").style.width = "100%"; // Complete progress bar
+                    document.getElementById("fetchingProgress").style.width = "100%";
                     document.getElementById("fetchingStatusMessage").textContent = "Complete";
                     logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Users fetched and saved successfully.</p>`;
                 } else {
@@ -180,131 +166,71 @@
                     return;
                 }
 
-                // Retrieve users from the staging DB
+                // Retrieve users from staging
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving users from staging database...</p>`;
                 const users = await getUsersFromStaging();
-
                 logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${users.length} users from staging.</p>`;
 
-                let allUsersMigratedSuccessfully = true; // Track whether all users are migrated successfully
+                // Start migration
+                document.getElementById("migrationMessage").textContent = "Starting migration...";
+                document.getElementById("migrationProgress").style.width = "0%";
 
-                // Anonymization and Migration for each user
-                for (let i = 0; i < users.length; i++) {
-                    const user = users[i];
-                    const userId = user.id; // Use the correct property (e.g., `id` instead of `user_id`)
-                    // Migration
-                    document.getElementById("migrationMessage").textContent = `Migrating user ${userId}...`;
-                    document.getElementById("migrationProgress").style.width = `${(i / users.length) * 100}%`;
-                    logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Migrating user ${userId}...</p>`;
+                const response = await fetch("/migrate", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ user_ids: users.map(user => user.id) }),
+                });
 
-                    const migrationData = await migrateUsers([userId]); // Pass userId as a list
-
-                    if (migrationData.results && migrationData.results.length > 0) {
-                        const result = migrationData.results[0]; // Get the result for the current user
-                        if (result.staging_status === "Success" && result.crm_status === "Success") {
-                            document.getElementById("migrationProgress").style.width = `${((i + 1) / users.length) * 100}%`;
-                            logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Migration successful for user ${userId}.</p>`;
-                        } else {
-                            allUsersMigratedSuccessfully = false; // Mark as failed
-                            logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Migration failed for user ${userId}: ${result.error || "Unknown error"}</p>`;
-                            continue; // Skip to next user
-                        }
-                    } else {
-                        allUsersMigratedSuccessfully = false; // Mark as failed
-                        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Migration failed for user ${userId}: No result returned.</p>`;
-                        continue; // Skip to next user
-                    }
+                if (!response.ok) {
+                    throw new Error("Migration failed");
                 }
 
-                // Update Migration Status
-                if (allUsersMigratedSuccessfully) {
+                const data = await response.json();
+                const totalUsers = data.total_records;
+                let processedUsers = 0;
+
+                for (const result of data.results) {
+                    processedUsers++;
+                    const progress = (processedUsers / totalUsers) * 100;
+                    document.getElementById("migrationProgress").style.width = `${progress}%`;
+                    document.getElementById("migrationMessage").textContent = `Migrating user ${result.user_id}...`;
+
+                    logsContainer.innerHTML += `<p><strong>User ID:</strong> ${result.user_id} <br> <strong>Staging Status:</strong> ${result.staging_status} <br><strong>CRM Status:</strong> ${result.crm_status} <br><strong>Action:</strong> ${result.action || "none"} <br>${result.error ? `<strong>Error:</strong> ${result.error}` : ""}</p>`;
+                    logsContainer.scrollTop = logsContainer.scrollHeight;
+
+                    // Introduce a small delay to allow the UI to update
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+                }
+
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Migration Summary:</p><p>Total Records: ${data.total_records}</p><p>Successfully Migrated: ${data.success_count}</p><p>Updated: ${data.update_count}</p><p>Inserted: ${data.insert_count}</p><p>Failed: ${data.error_count}</p>`;
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+
+                if (data.error_count === 0) {
                     document.getElementById("migrationStatusMessage").textContent = "Complete";
-
-                    // Fetch the CRM contacts URL from the backend
                     const crmContactsUrl = await getCrmContactsUrl();
-
                     if (crmContactsUrl) {
-                        // Update the link and show the container
                         document.getElementById("crmLink").href = crmContactsUrl;
                         document.getElementById("crmLinkContainer").style.display = "flex";
                     } else {
                         console.error('CRM contacts URL is not available');
                     }
                 } else {
-                    document.getElementById("migrationStatusMessage").textContent = "Failed";
+                    document.getElementById("migrationStatusMessage").textContent = "Partial Success";
                 }
 
-                // Reset progress bars after 1 second
                 setTimeout(resetProgressBars, 1000);
-
-                // Fetch and display updated logs after migration
-                //await fetchLogs();
             } catch (error) {
                 console.error("Error:", error);
                 logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration.</p>`;
                 document.getElementById("fetchingMessage").textContent = "Fetching: Error";
-                document.getElementById("anonymizationMessage").textContent = "Anonymization: Error";
                 document.getElementById("migrationMessage").textContent = "Migration: Error";
             }
         });
 
-        // Helper functions (fetchLogs, anonymizeUser, migrateUser, fetchAndSaveUsers, getUsersFromStaging)...
-        async function fetchLogs() {
-            try {
-                const response = await fetch('/migration-logs');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch logs');
-                }
-                const data = await response.json();
-                const logsContainer = document.getElementById('logsContainer');
-                logsContainer.innerHTML = '';
-                data.logs.forEach(log => {
-                    const logElement = document.createElement('div');
-                    logElement.classList.add('log-entry');
-                    logElement.innerHTML = `
-                        <strong>User ID:</strong> ${log.user_id} <br>
-                        <strong>Staging Status:</strong> ${log.staging_status} <br>
-                        <strong>CRM Status:</strong> ${log.crm_status} <br>
-                        <strong>Time:</strong> ${log.created_at} <br>
-                    `;
-                    logsContainer.appendChild(logElement);
-                });
-            } catch (error) {
-                console.error('Error fetching logs:', error);
-                const logsContainer = document.getElementById('logsContainer');
-                logsContainer.innerHTML = `<p><i class="fas fa-times-circle"></i> Error fetching logs: ${error.message}</p>`;
-            }
-        }
-
-        async function migrateUsers(user_ids) {
-            try {
-                const response = await fetch("/migrate", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        user_ids: user_ids, // Send a list of user_ids
-                    }),
-                });
-
-                if (!response.ok) {
-                    const errorDetails = await response.text();
-                    console.error("Migration failed:", errorDetails);
-                    throw new Error(`Migration failed: ${response.status}`);
-                }
-
-                const result = await response.json();
-                return result; // Return the result for further processing
-            } catch (error) {
-                console.error("Failed to migrate users:", error);
-                throw error; // Re-throw the error to handle it in the caller
-            }
-        }
-
         async function fetchAndSaveUsers(accessToken) {
             try {
-                console.log("Access Token:", accessToken); // Debugging
                 const response = await fetch("/fetch-and-save-users", {
                     method: "POST",
                     headers: {
