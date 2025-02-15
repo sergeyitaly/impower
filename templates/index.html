@@ -32,7 +32,7 @@
         </button>
 
         <!-- Progress Bars -->
-        <div class="progress-container"style="display: none;">
+        <div class="progress-container" style="display: none;">
             <h3>Migration Progress</h3>
 
             <!-- Fetching Users Progress -->
@@ -48,7 +48,7 @@
         </div>
 
         <!-- Status Cards -->
-        <div class="status-cards"style="display: none;">
+        <div class="status-cards" style="display: none;">
             <div class="card" id="fetchingStatus">
                 <h3><i class="fas fa-download"></i> Fetching Status</h3>
                 <p id="fetchingStatusMessage">Pending</p>
@@ -60,7 +60,7 @@
         </div>
 
         <!-- Logs Section -->
-        <div class="logs"style="display: none;">
+        <div class="logs" style="display: none;">
             <h3><i class="fas fa-clipboard-list"></i> Logs</h3>
             <button id="toggleLogs" class="btn">Show Logs</button>
             <div id="logsContainer" style="display: none;"></div>
@@ -84,160 +84,170 @@
             }
         });
 
+        document.getElementById("authenticateBtn").addEventListener("click", async () => {
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
 
-            document.getElementById("authenticateBtn").addEventListener("click", async () => {
-                const email = document.getElementById("email").value;
-                const password = document.getElementById("password").value;
+            if (!email || !password) {
+                alert("Please enter both email and password.");
+                return;
+            }
 
-                if (!email || !password) {
-                    alert("Please enter both email and password.");
+            try {
+                const response = await fetch("/authenticate", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ email, password }),
+                });
+
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const text = await response.text();
+                    throw new Error(`Unexpected response: ${text}`);
+                }
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Authentication failed.");
+                }
+
+                accessToken = data.access_token;
+                document.getElementById("authForm").style.display = "none";
+                
+                // Show Migrate Button
+                document.getElementById("migrateBtn").style.display = "block";
+
+                // Make progress bar & status cards visible
+                document.querySelector(".progress-container").style.display = "block";
+                document.querySelector(".logs").style.display = "block";
+                document.querySelector(".status-cards").style.display = "flex"; // Ensures proper layout
+
+            } catch (error) {
+                console.error("Error during authentication:", error);
+                alert(`Authentication failed: ${error.message}`);
+            }
+        });
+
+        async function getCrmContactsUrl() {
+            try {
+                const response = await fetch('/api/crm-contacts-url');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch CRM contacts URL');
+                }
+                const data = await response.json();
+                return data.crmContactsUrl;
+            } catch (error) {
+                console.error('Error fetching CRM contacts URL:', error);
+                return null;
+            }
+        }
+
+        function resetProgressBars() {
+            document.getElementById("fetchingProgress").style.width = "0%";
+            document.getElementById("migrationProgress").style.width = "0%";
+            document.getElementById("fetchingMessage").textContent = "Fetching Users: Not Started";
+            document.getElementById("migrationMessage").textContent = "Migration: Not Started";
+            document.getElementById("fetchingStatusMessage").textContent = "Pending";
+            document.getElementById("migrationStatusMessage").textContent = "Pending";
+        }
+
+        document.getElementById("migrateBtn").addEventListener("click", async () => {
+            try {
+                const logsContainer = document.getElementById("logsContainer");
+                logsContainer.innerHTML = "";
+                resetProgressBars();
+
+                // Fetch and display existing logs
+                //await fetchLogs();
+
+                // Fetch and save users from Facil.io to staging DB
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving users to staging...</p>`;
+                document.getElementById("fetchingMessage").textContent = "Fetching users...";
+                document.getElementById("fetchingProgress").style.width = "50%"; // Update progress bar
+
+                const fetchAndSaveData = await fetchAndSaveUsers(accessToken);
+
+                if (fetchAndSaveData.success) {
+                    document.getElementById("fetchingProgress").style.width = "100%"; // Complete progress bar
+                    document.getElementById("fetchingStatusMessage").textContent = "Complete";
+                    logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Users fetched and saved successfully.</p>`;
+                } else {
+                    document.getElementById("fetchingStatusMessage").textContent = "Failed";
+                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch and save users.</p>`;
                     return;
                 }
 
-                try {
-                    const response = await fetch("/authenticate", {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ email, password }),
-                    });
+                // Retrieve users from the staging DB
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving users from staging database...</p>`;
+                const users = await getUsersFromStaging();
 
-                    const contentType = response.headers.get("content-type");
-                    if (!contentType || !contentType.includes("application/json")) {
-                        const text = await response.text();
-                        throw new Error(`Unexpected response: ${text}`);
-                    }
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${users.length} users from staging.</p>`;
 
-                    const data = await response.json();
+                let allUsersMigratedSuccessfully = true; // Track whether all users are migrated successfully
 
-                    if (!response.ok) {
-                        throw new Error(data.message || "Authentication failed.");
-                    }
+                // Anonymization and Migration for each user
+                for (let i = 0; i < users.length; i++) {
+                    const user = users[i];
+                    const userId = user.id; // Use the correct property (e.g., `id` instead of `user_id`)
+                    // Migration
+                    document.getElementById("migrationMessage").textContent = `Migrating user ${userId}...`;
+                    document.getElementById("migrationProgress").style.width = `${(i / users.length) * 100}%`;
+                    logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Migrating user ${userId}...</p>`;
 
-                    accessToken = data.access_token;
-                    document.getElementById("authForm").style.display = "none";
-                    
-                    // Show Migrate Button
-                    document.getElementById("migrateBtn").style.display = "block";
+                    const migrationData = await migrateUsers([userId]); // Pass userId as a list
 
-                    // Make progress bar & status cards visible
-                    document.querySelector(".progress-container").style.display = "block";
-                    document.querySelector(".logs").style.display = "block";
-                    document.querySelector(".status-cards").style.display = "flex"; // Ensures proper layout
-
-                } catch (error) {
-                    console.error("Error during authentication:", error);
-                    alert(`Authentication failed: ${error.message}`);
-                }
-            });
-            async function getCrmContactsUrl() {
-                try {
-                    const response = await fetch('/api/crm-contacts-url');
-                    if (!response.ok) {
-                        throw new Error('Failed to fetch CRM contacts URL');
-                    }
-                    const data = await response.json();
-                    return data.crmContactsUrl;
-                } catch (error) {
-                    console.error('Error fetching CRM contacts URL:', error);
-                    return null;
-                }
-            }
-            document.getElementById("migrateBtn").addEventListener("click", async () => {
-                try {
-                    const logsContainer = document.getElementById("logsContainer");
-                    logsContainer.innerHTML = "";
-                    document.getElementById("fetchingProgress").style.width = "0%";
-                    document.getElementById("migrationProgress").style.width = "0%";
-                    document.getElementById("fetchingStatusMessage").textContent = "Pending";
-                    document.getElementById("migrationStatusMessage").textContent = "Pending";
-            
-                    // Fetch and display existing logs
-                    //await fetchLogs();
-            
-                    // Fetch and save users from Facil.io to staging DB
-                    logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving users to staging...</p>`;
-                    document.getElementById("fetchingMessage").textContent = "Fetching users...";
-                    document.getElementById("fetchingProgress").style.width = "50%"; // Update progress bar
-            
-                    const fetchAndSaveData = await fetchAndSaveUsers(accessToken);
-            
-                    if (fetchAndSaveData.success) {
-                        document.getElementById("fetchingProgress").style.width = "100%"; // Complete progress bar
-                        document.getElementById("fetchingStatusMessage").textContent = "Complete";
-                        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Users fetched and saved successfully.</p>`;
-                    } else {
-                        document.getElementById("fetchingStatusMessage").textContent = "Failed";
-                        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch and save users.</p>`;
-                        return;
-                    }
-            
-                    // Retrieve users from the staging DB
-                    logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving users from staging database...</p>`;
-                    const users = await getUsersFromStaging();
-            
-                    logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${users.length} users from staging.</p>`;
-            
-                    let allUsersMigratedSuccessfully = true; // Track whether all users are migrated successfully
-            
-                    // Anonymization and Migration for each user
-                    for (let i = 0; i < users.length; i++) {
-                        const user = users[i];
-                        const userId = user.id; // Use the correct property (e.g., `id` instead of `user_id`)
-                        // Migration
-                        document.getElementById("migrationMessage").textContent = `Migrating user ${userId}...`;
-                        document.getElementById("migrationProgress").style.width = `${(i / users.length) * 100}%`;
-                        logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Migrating user ${userId}...</p>`;
-                    
-                        const migrationData = await migrateUsers([userId]); // Pass userId as a list
-                    
-                        if (migrationData.results && migrationData.results.length > 0) {
-                            const result = migrationData.results[0]; // Get the result for the current user
-                            if (result.staging_status === "Success" && result.crm_status === "Success") {
-                                document.getElementById("migrationProgress").style.width = `${((i + 1) / users.length) * 100}%`;
-                                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Migration successful for user ${userId}.</p>`;
-                            } else {
-                                allUsersMigratedSuccessfully = false; // Mark as failed
-                                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Migration failed for user ${userId}: ${result.error || "Unknown error"}</p>`;
-                                continue; // Skip to next user
-                            }
+                    if (migrationData.results && migrationData.results.length > 0) {
+                        const result = migrationData.results[0]; // Get the result for the current user
+                        if (result.staging_status === "Success" && result.crm_status === "Success") {
+                            document.getElementById("migrationProgress").style.width = `${((i + 1) / users.length) * 100}%`;
+                            logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Migration successful for user ${userId}.</p>`;
                         } else {
                             allUsersMigratedSuccessfully = false; // Mark as failed
-                            logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Migration failed for user ${userId}: No result returned.</p>`;
+                            logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Migration failed for user ${userId}: ${result.error || "Unknown error"}</p>`;
                             continue; // Skip to next user
                         }
-                    }
-            
-                    // Update Migration Status
-                    if (allUsersMigratedSuccessfully) {
-                        document.getElementById("migrationStatusMessage").textContent = "Complete";
-            
-                        // Fetch the CRM contacts URL from the backend
-                        const crmContactsUrl = await getCrmContactsUrl();
-            
-                        if (crmContactsUrl) {
-                            // Update the link and show the container
-                            document.getElementById("crmLink").href = crmContactsUrl;
-                            document.getElementById("crmLinkContainer").style.display = "flex";
-                        } else {
-                            console.error('CRM contacts URL is not available');
-                        }
                     } else {
-                        document.getElementById("migrationStatusMessage").textContent = "Failed";
+                        allUsersMigratedSuccessfully = false; // Mark as failed
+                        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Migration failed for user ${userId}: No result returned.</p>`;
+                        continue; // Skip to next user
                     }
-                    
-                    // Fetch and display updated logs after migration
-                    //await fetchLogs();
-                } catch (error) {
-                    console.error("Error:", error);
-                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration.</p>`;
-                    document.getElementById("fetchingMessage").textContent = "Fetching: Error";
-                    document.getElementById("anonymizationMessage").textContent = "Anonymization: Error";
-                    document.getElementById("migrationMessage").textContent = "Migration: Error";
                 }
-            });
-            
+
+                // Update Migration Status
+                if (allUsersMigratedSuccessfully) {
+                    document.getElementById("migrationStatusMessage").textContent = "Complete";
+
+                    // Fetch the CRM contacts URL from the backend
+                    const crmContactsUrl = await getCrmContactsUrl();
+
+                    if (crmContactsUrl) {
+                        // Update the link and show the container
+                        document.getElementById("crmLink").href = crmContactsUrl;
+                        document.getElementById("crmLinkContainer").style.display = "flex";
+                    } else {
+                        console.error('CRM contacts URL is not available');
+                    }
+                } else {
+                    document.getElementById("migrationStatusMessage").textContent = "Failed";
+                }
+
+                // Reset progress bars after 1 second
+                setTimeout(resetProgressBars, 1000);
+
+                // Fetch and display updated logs after migration
+                //await fetchLogs();
+            } catch (error) {
+                console.error("Error:", error);
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration.</p>`;
+                document.getElementById("fetchingMessage").textContent = "Fetching: Error";
+                document.getElementById("anonymizationMessage").textContent = "Anonymization: Error";
+                document.getElementById("migrationMessage").textContent = "Migration: Error";
+            }
+        });
+
         // Helper functions (fetchLogs, anonymizeUser, migrateUser, fetchAndSaveUsers, getUsersFromStaging)...
         async function fetchLogs() {
             try {
