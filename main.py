@@ -236,7 +236,6 @@ async def fetch_and_save_users(background_tasks: BackgroundTasks, authorization:
     except Exception as e:
         logger.error(f"Error fetching and saving users: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching and saving users: {str(e)}")
-
 def save_accounts_to_staging(accounts: list):
     db = SessionLocal()
     try:
@@ -245,14 +244,18 @@ def save_accounts_to_staging(accounts: list):
                 logger.error(f"Invalid account data: {account}")
                 continue
 
-            # If phone is missing, set a default value
-            phone = account.get("phoneNumber") or "N/A"  # Or "" for empty string
+            # Handle null values for required fields
+            name = account.get("firstName") or "N/A"  # Default value for name
+            lastname = account.get("lastName") or "N/A"  # Default value for lastname
+            email = account.get("email") or "N/A"  # Default value for email
+            phone = account.get("phoneNumber") or "N/A"  # Default value for phone
 
+            # Create the User object with default values for null fields
             db_account = User(
                 id=account.get("id"),
-                name=account.get("firstlName"),
-                lastname=account.get("lastName"),
-                email=account.get("email"),
+                name=name,
+                lastname=lastname,
+                email=email,
                 phone=phone,
             )
             db.merge(db_account)
@@ -263,7 +266,6 @@ def save_accounts_to_staging(accounts: list):
         db.rollback()
     finally:
         db.close()
-
 
 def fetch_account_by_id(account_id: int, access_token: str):
     headers = {
@@ -484,100 +486,6 @@ async def get_users():
     return users
 
 
-class MigrateResponse(BaseModel):
-    total_records: int
-    success_count: int
-    error_count: int
-    update_count: int
-    insert_count: int
-    results: List[dict]
-
-@app.post("/migrate", response_model=MigrateResponse)
-async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTasks):
-    total_records = len(request.user_ids)
-    success_count = 0
-    error_count = 0
-    update_count = 0
-    insert_count = 0
-    results = []
-
-    for user_id in request.user_ids:
-        try:
-            user_data = get_user_from_db(user_id)
-            if not user_data:
-                raise HTTPException(status_code=404, detail=f"User {user_id} not found in staging database")
-
-            # Apply anonymization
-            anonymized_data = {
-                "id": user_data["id"],
-                "name": anonymize_data(user_data["name"], "name"),
-                "lastname": anonymize_data(user_data["lastname"], "lastname"),
-                "email": anonymize_data(user_data["email"], "email"),
-                "phone": anonymize_data(user_data["phone"], "phone"),
-            }
-
-            log_migration_result(
-                user_id=user_id,
-                staging_status="Anonymization Success",
-                crm_status="Pending",
-                crm_entity_updated=False
-            )
-
-            # Migrate anonymized data
-            staging_status = "Success"
-            crm_result = migrate_to_crm(anonymized_data)
-            crm_status = "Success" if crm_result["success"] else "Failed"
-            crm_entity_updated = crm_result["success"]
-
-            if crm_result["success"]:
-                success_count += 1
-                if crm_result["action"] == "updated":
-                    update_count += 1
-                elif crm_result["action"] == "inserted":
-                    insert_count += 1
-            else:
-                error_count += 1
-
-            log_migration_result(
-                user_id=user_id,
-                staging_status=staging_status,
-                crm_status=crm_status,
-                crm_entity_updated=crm_entity_updated
-            )
-
-            results.append({
-                "user_id": user_id,
-                "staging_status": staging_status,
-                "crm_status": crm_status,
-                "action": crm_result.get("action", "none")
-            })
-
-        except Exception as e:
-            error_count += 1
-            log_migration_result(
-                user_id=user_id,
-                staging_status="Failed",
-                crm_status="Failed",
-                crm_entity_updated=False,
-                error_message=str(e)
-            )
-            results.append({
-                "user_id": user_id,
-                "staging_status": "Failed",
-                "crm_status": "Failed",
-                "error": str(e)
-            })
-    
-    return {
-        "total_records": total_records,
-        "success_count": success_count,
-        "error_count": error_count,
-        "update_count": update_count,
-        "insert_count": insert_count,
-        "results": results
-    }
-
-
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
     crm_url = f"{CRM_URL}/contacts"
@@ -585,13 +493,13 @@ def migrate_to_crm(user_data: dict):
     crm_data = {
         "firstname": user_data['name'],
         "lastname": user_data['lastname'],
-        "emailaddress1": user_data['email'],
+        "emailaddress1": user_data['email'],  # Anonymized email
         "telephone1": user_data['phone'],
     }
 
     try:
-        # Step 1: Check if the user already exists in CRM by email
-        query_url = f"{CRM_URL}/contacts?$filter=emailaddress1 eq '{user_data['email']}'"
+        # Step 1: Check if the user already exists in CRM by anonymized email
+        query_url = f"{CRM_URL}/contacts?$filter=emailaddress1 eq '{user_data['email']}'"  # Use anonymized email
         response = requests.get(query_url, headers={
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
@@ -610,8 +518,10 @@ def migrate_to_crm(user_data: dict):
                 }, data=json.dumps(crm_data))
 
                 if update_response.status_code in [200, 204]:
+                    logger.info(f"Successfully updated contact {contact_id} in CRM.")
                     return {"success": True, "action": "updated"}
                 else:
+                    logger.error(f"Failed to update contact {contact_id} in CRM. Status code: {update_response.status_code}")
                     return {"success": False, "action": "update_failed"}
             else:
                 # User does not exist → Create a new record
@@ -621,14 +531,125 @@ def migrate_to_crm(user_data: dict):
                 }, data=json.dumps(crm_data))
 
                 if create_response.status_code == 201:
+                    logger.info(f"Successfully inserted new contact into CRM.")
                     return {"success": True, "action": "inserted"}
                 else:
+                    logger.error(f"Failed to insert new contact into CRM. Status code: {create_response.status_code}, Response: {create_response.text}")
                     return {"success": False, "action": "creation_failed"}
         else:
+            logger.error(f"Failed to query CRM for existing contacts. Status code: {response.status_code}, Response: {response.text}")
             return {"success": False, "action": "query_failed"}
     except Exception as e:
+        logger.error(f"An error occurred while migrating user data to CRM: {str(e)}")
         return {"success": False, "action": "error", "error": str(e)}
+
+class MigrateResponse(BaseModel):
+    total_records: int
+    success_count: int
+    error_count: int
+    update_count: int
+    insert_count: int
+    results: List[dict]
+
+
+@app.post("/migrate", response_model=MigrateResponse)
+
+async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTasks):
+    total_records = len(request.user_ids)
+    success_count = 0
+    error_count = 0
+    update_count = 0
+    insert_count = 0
+    results = []
+
+    for user_id in request.user_ids:
+        try:
+            # Step 1: Fetch user data from the staging database
+            user_data = get_user_from_db(user_id)
+            if not user_data:
+                logger.error(f"User {user_id} not found in staging database")
+                raise HTTPException(status_code=404, detail=f"User {user_id} not found in staging database")
+
+            # Step 2: Apply anonymization to user data
+            anonymized_data = {
+                "id": user_data["id"],
+                "name": anonymize_data(user_data["name"], "name"),
+                "lastname": anonymize_data(user_data["lastname"], "lastname"),
+                "email": anonymize_data(user_data["email"], "email"),  # Anonymized email
+                "phone": anonymize_data(user_data["phone"], "phone"),
+            }
+
+            # Log anonymization success
+            logger.info(f"Successfully anonymized data for user {user_id}")
+            log_migration_result(
+                user_id=user_id,
+                staging_status="Anonymization Success",
+                crm_status="Pending",
+                crm_entity_updated=False
+            )
+
+            # Step 3: Migrate anonymized data to CRM
+            staging_status = "Success"
+            crm_result = migrate_to_crm(anonymized_data)  # Pass anonymized_data
+            crm_status = "Success" if crm_result["success"] else "Failed"
+            crm_entity_updated = crm_result["success"]
+
+            # Step 4: Update counts based on CRM result
+            if crm_result["success"]:
+                success_count += 1
+                if crm_result["action"] == "updated":
+                    update_count += 1
+                elif crm_result["action"] == "inserted":
+                    insert_count += 1
+            else:
+                error_count += 1
+
+            # Log CRM migration result
+            logger.info(f"CRM migration result for user {user_id}: {crm_result}")
+            log_migration_result(
+                user_id=user_id,
+                staging_status=staging_status,
+                crm_status=crm_status,
+                crm_entity_updated=crm_entity_updated,
+                error_message=crm_result.get("error", None)  # Log any errors from CRM
+            )
+
+            # Add result to the results list
+            results.append({
+                "user_id": user_id,
+                "staging_status": staging_status,
+                "crm_status": crm_status,
+                "action": crm_result.get("action", "none"),
+                "error": crm_result.get("error", None)  # Include error details if any
+            })
+
+        except Exception as e:
+            # Handle unexpected errors
+            error_count += 1
+            logger.error(f"An unexpected error occurred while migrating user {user_id}: {str(e)}")
+            log_migration_result(
+                user_id=user_id,
+                staging_status="Failed",
+                crm_status="Failed",
+                crm_entity_updated=False,
+                error_message=str(e)
+            )
+            results.append({
+                "user_id": user_id,
+                "staging_status": "Failed",
+                "crm_status": "Failed",
+                "error": str(e)
+            })
     
+    # Return the final migration summary
+    return {
+        "total_records": total_records,
+        "success_count": success_count,
+        "error_count": error_count,
+        "update_count": update_count,
+        "insert_count": insert_count,
+        "results": results
+    }
 
 def log_migration_result(user_id: int, staging_status: str, crm_status: str, crm_entity_updated: bool, error_message: str = None):
     db = SessionLocal()
