@@ -19,6 +19,7 @@ from sqlalchemy import text
 import logging
 from sqlalchemy.orm import Session
 from typing import Optional
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +62,10 @@ DATABASE_URL = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
+class MigrateRequest(BaseModel):
+    user_ids: List[int]
+
 # Pydantic models for request body validation
 class AuthRequest(BaseModel):
     email: str
@@ -75,270 +80,140 @@ class DataResponse(BaseModel):
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
-# Anonymize sensitive user data
-def anonymize_user_data(user_data: dict, user_id: int):
-    try:
-        # Anonymize data
-        user_data['email'] = f"{random_string(10)}@example.com"
-        user_data['phone'] = f"+{random.randint(1000000000, 9999999999)}"
-        user_data['name'] = f"User_{random_string(5)}"
-
-        # Log migration result after anonymization
-        log_migration_result(
-            user_id=user_id,
-            staging_status="anonymized",
-            crm_status="not_updated",  # Assuming CRM wasn't updated
-            crm_entity_updated=False
-        )
-
-        return user_data
-    except Exception as e:
-        # Log any error during anonymization
-        log_migration_result(
-            user_id=user_id,
-            staging_status="anonymization_failed",
-            crm_status="not_updated",
-            crm_entity_updated=False,
-            error_message=str(e)
-        )
-        raise HTTPException(status_code=500, detail=f"Error anonymizing user data: {e}")
-
-
-def authenticate_by_email(email: str, password: str, two_factor_code: str = None):
+async def authenticate_by_email(email: str, password: str, two_factor_code: str = None):
     payload = {
-        "userMail": email,
-        "userPassword": password,
-        "userCode": two_factor_code  # Include 2FA code if provided
+        "email": email,
+        "password": password,
+        "twoFactorCode": two_factor_code,
+        "skipMultiFactorAuthentication": True,
     }
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    # Log the payload for debugging
+    headers = {"Content-Type": "application/json"}
     logger.info(f"Sending authentication payload: {payload}")
-    
     try:
-        response = requests.post(f"{API_URL}/user/authenticateByMail", headers=headers, json=payload)
-        
-        # Log the raw response for debugging
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_URL}/api/auth/login", headers=headers, json=payload)
         logger.info(f"API response status: {response.status_code}")
         logger.info(f"API response text: {response.text}")
-        
+
         if response.status_code == 200:
             auth_data = response.json()
+            logger.info(f"Raw API response: {auth_data}")
 
-            # Check if 2FA is required
+            # Handle 2FA requirement
             if auth_data.get("twoFactorRequired") and not two_factor_code:
-                return {"twoFactorRequired": True, "message": "2FA code required"}
-            
-            # Proceed if no 2FA is required or 2FA code is provided
-            access_token = auth_data.get("accessToken")
-            #refresh_token = auth_data.get("refreshToken")
-            
-            if not access_token:
-                error_message = "Access token missing in response"
-                log_migration_result(
-                    user_id=-1, 
-                    staging_status="authentication_error_by_email",
-                    crm_status="not_updated",
-                    crm_entity_updated=False,
-                    error_message=error_message
-                )
-                raise HTTPException(status_code=500, detail=error_message)
-            
+                return {
+                    "success": False,
+                    "twoFactorRequired": True,
+                    "message": "2FA code required",
+                }
+
+            # Ensure access token is present
+            if "accessToken" not in auth_data:
+                raise ValueError("Access token missing in response")
+
             return {
                 "success": True,
-                "accessToken": access_token,
-                #"refreshToken": refresh_token
+                "accessToken": auth_data["accessToken"],
+                "refreshToken": auth_data.get("refreshToken"),
             }
 
-        else:
-            # Handle API errors
-            error_message = f"Authentication failed: {response.text}"
-            log_migration_result(
-                user_id=-1, 
-                staging_status="authentication_failed",
-                crm_status="not_updated",
-                crm_entity_updated=False,
-                error_message=error_message
-            )
-            raise HTTPException(status_code=response.status_code, detail=error_message)
-    
-    except Exception as e:
-        error_message = f"Authentication error by email: {str(e)}"
-        log_migration_result(
-            user_id=-1, 
-            staging_status="authentication_error_by_email",
-            crm_status="not_updated",
-            crm_entity_updated=False,
-            error_message=error_message
-        )
-        raise HTTPException(status_code=500, detail=error_message)
-    
-def save_users_to_staging(users: list):
-    db = SessionLocal()
+        # Handle non-200 status codes
+        error_message = f"Authentication failed: {response.text}"
+        logger.error(error_message)
+        return {"success": False, "message": error_message}
+
+    except httpx.RequestError as e:
+        logger.error(f"HTTP request error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Authentication service unavailable")
+
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/refresh-token")
+async def refresh_token(refresh_token: str):
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {refresh_token}"}
     try:
-        for user in users:
-            # Ensure user is a dictionary and contains required fields
-            if not isinstance(user, dict) or not user.get("id"):
-                logger.error(f"Invalid user data: {user}")
-                continue  # Skip invalid user data
-
-            # Map API fields to your database model
-            db_user = User(
-                id=user.get("id"),
-                name=user.get("name"),
-                email=user.get("email"),
-                phone=user.get("phone"),
-            )
-            # Upsert user
-            db.merge(db_user)
-        db.commit()
-        logger.info(f"Successfully stored {len(users)} users in staging DB")
-    except Exception as e:
-        logger.error(f"Error saving users: {e}")
-        db.rollback()
-    finally:
-        db.close()                
-
-
-
-def fetch_user_by_id(user_id: int, access_token: str):
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json"  # Required by the API
-    }
-    
-    try:
-        # Fetch user by ID from the external API
-        response = requests.get(f"{API_URL}/user/get?id={user_id}", headers=headers)
-        logger.info(f"Fetching user {user_id}: {response.status_code}, {response.text}")  # Debugging
-
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{API_URL}/api/auth/refresh", headers=headers)
         if response.status_code == 200:
-            user_data = response.json()
-            
-            # Log the raw API response for debugging
-            logger.info(f"Raw API response for user {user_id}: {user_data}")
-            
-            # Handle case where the API returns an empty response or invalid structure
-            if not user_data or not isinstance(user_data, dict):
-                logger.warning(f"User {user_id} not found or invalid response structure")
-                return None
-            
-            # Extract required fields
-            user = {
-                "id": user_data.get("userID"),
-                "name": user_data.get("userFirstname"),
-                "email": user_data.get("userMail"),
-                "phone": user_data.get("userMobile"),
-            }
-            
-            # Log the extracted user data for debugging
-            logger.info(f"Extracted user data for ID {user_id}: {user}")
-            return user
-        
-        elif response.status_code == 404:
-            logger.warning(f"User {user_id} not found")
-            return None  # User does not exist
-        else:
-            raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch user {user_id}: {response.text}")
-    
-    except Exception as e:
-        logger.error(f"Error fetching user {user_id}: {str(e)}")
-        return None  # Skip this user and continue
+            new_tokens = response.json()
+            return {"access_token": new_tokens["accessToken"], "refresh_token": new_tokens["refreshToken"]}
+        logger.error(f"Token refresh failed: {response.text}")
+        raise HTTPException(status_code=response.status_code, detail="Failed to refresh token")
+    except httpx.RequestError as e:
+        logger.error(f"HTTP request error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Token refresh service unavailable")
 
 
 
 def fetch_users(access_token: str, offset: int, limit: int):
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "accept": "application/json"  # Required by the API
+        "accept": "application/json",
+        "api-version": "1.0",  # Replace with the required API version
+        "Accept-Language": "en-DE",  # Replace with the desired language
     }
-    
+
     try:
         # Fetch users from the external API
-        response = requests.get(f"{API_URL}/api/source/getUsers?offset={offset}&limit={limit}", headers=headers)
-        logger.info(f"Fetching users: {response.status_code}, {response.text}")  # Debugging
+        response = requests.get(
+            f"{API_URL}/api/accounts",
+            headers=headers,
+            params={
+                "PageSize": limit,
+                "PageNumber": offset // limit + 1,  # Calculate page number from offset
+                "SortByAttributeName": "firstName",  # Sort by first name (adjust as needed)
+                "AscendingOrder": True,  # Sort in ascending order (adjust as needed)
+            },
+        )
+
+        # Log the full response for debugging
+        logger.info(f"API response status: {response.status_code}")
+        logger.info(f"API response text: {response.text}")
 
         if response.status_code == 200:
-            users_data = response.json()
-            
+            accounts_data = response.json()
+
             # Log the raw API response for debugging
-            logger.info(f"Raw API response for users: {users_data}")
-            
+            logger.info(f"Raw API response for accounts: {accounts_data}")
+
             # Handle case where the API returns an empty response or invalid structure
-            if not users_data or not isinstance(users_data, list):
-                logger.warning(f"No users found or invalid response structure")
+            if not accounts_data or not isinstance(accounts_data, dict) or "items" not in accounts_data:
+                logger.warning(f"No accounts found or invalid response structure")
                 return []
-            
-            # Extract required fields for each user
+
+            # Extract required fields for each account
             users = []
-            for user_data in users_data:
+            for account in accounts_data["items"]:
                 user = {
-                    "id": user_data.get("userFaciliooID"),
-                    "name": f"{user_data.get('userFirstname')} {user_data.get('userLastname')}",  # Combine first and last name
-                    "email": user_data.get("userMail"),
+                    "id": account.get("id"),
+                    "name": f"{account.get('firstName')} {account.get('lastName')}",  # Combine first and last name
+                    "email": account.get("email"),
+                    "partyId": account.get("partyId"),
+                    "isPartyAdministrator": account.get("isPartyAdministrator"),
                 }
                 users.append(user)
-            
+
             # Log the extracted user data for debugging
             logger.info(f"Extracted user data: {users}")
             return users
-        
+
+        elif response.status_code == 401:
+            logger.warning(f"Unauthorized: {response.text}")
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing access token")
         elif response.status_code == 404:
-            logger.warning(f"No users found")
-            return []  # No users exist
+            logger.warning(f"No accounts found")
+            return []  # No accounts exist
         else:
-            raise HTTPException(status_code=response.status_code, detail=f"Failed to fetch users: {response.text}")
-    
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"Failed to fetch accounts: {response.text}",
+            )
+
     except Exception as e:
-        logger.error(f"Error fetching users: {str(e)}")
-        return []  # Return an empty list in case of errors
-    
-
-def fetch_all_users(access_token: str):
-    users = []
-    user_id = 1  # Start with user ID 1
-    max_users = 30  # Limit to the first 30 users
-    max_attempts = 200  # Maximum number of user IDs to check
-
-    while len(users) < max_users and user_id <= max_attempts:
-        user = fetch_user_by_id(user_id, access_token)
-        if user is not None:
-            users.append(user)
-            logger.info(f"User {user_id} found and added to the list")
-        else:
-            logger.warning(f"User {user_id} not found")
-        user_id += 1  # Move to the next user ID
-
-    if len(users) < max_users:
-        logger.warning(f"Only {len(users)} users found after checking {max_attempts} IDs")
-    else:
-        logger.info(f"Successfully fetched {len(users)} users")
-
-    return users
-
-
-
-def fetch_all_users_at_once(access_token: str, batch_size: int = 25):
-    all_users = []
-    offset = 0  # Start with offset 0
-
-    while True:
-        # Fetch a batch of users
-        users = fetch_users(access_token, offset=offset, limit=batch_size)
-        
-        # If no more users are returned, break the loop
-        if not users:
-            break
-        
-        # Add the fetched users to the list
-        all_users.extend(users)
-        
-        # Increment the offset for the next batch
-        offset += batch_size
-
-    return all_users
+        logger.error(f"Error fetching accounts: {str(e)}")
+        return []  # Return an empty list in case of errors    
 
 @app.post("/fetch-and-save-users")
 async def fetch_and_save_users(background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
@@ -349,21 +224,12 @@ async def fetch_and_save_users(background_tasks: BackgroundTasks, authorization:
     logger.info(f"Access token received: {access_token}")  # Debugging
 
     try:
-        # Fetch users using the access token
-#        users = fetch_all_users(access_token)
-        users = fetch_all_users_at_once(access_token, batch_size=25)
-
+        users = fetch_all_accounts(access_token, batch_size=25)
         logger.info(f"Fetched {len(users)} users")  # Debugging
-
         if not users:
             raise HTTPException(status_code=404, detail="No users found")
-
-        # Save users to the staging database
-        save_users_to_staging(users)
-
-        # Optionally, trigger background tasks
-        background_tasks.add_task(save_users_to_staging, users)
-
+        save_accounts_to_staging(users)
+        background_tasks.add_task(save_accounts_to_staging, users)
         return {"success": True, "message": f"Users fetched and saved successfully. Total users: {len(users)}"}
     except HTTPException as e:
         raise e  # Re-raise HTTPException to return the correct status code
@@ -371,30 +237,193 @@ async def fetch_and_save_users(background_tasks: BackgroundTasks, authorization:
         logger.error(f"Error fetching and saving users: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching and saving users: {str(e)}")
 
+def save_accounts_to_staging(accounts: list):
+    db = SessionLocal()
+    try:
+        for account in accounts:
+            if not isinstance(account, dict) or not account.get("id"):
+                logger.error(f"Invalid account data: {account}")
+                continue
 
-# Function to migrate user data to CRM opportunity customer entity
+            # If phone is missing, set a default value
+            phone = account.get("phoneNumber") or "N/A"  # Or "" for empty string
+
+            db_account = User(
+                id=account.get("id"),
+                name=account.get("fullName"),
+                email=account.get("email"),
+                phone=phone,
+            )
+            db.merge(db_account)
+        db.commit()
+        logger.info(f"Successfully stored {len(accounts)} accounts in staging DB")
+    except Exception as e:
+        logger.error(f"Error saving accounts: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def fetch_account_by_id(account_id: int, access_token: str):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+    
+    try:
+        response = requests.get(f"{API_URL}/api/accounts/{account_id}", headers=headers)
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 404:
+            logger.warning(f"Account {account_id} not found")
+            return None
+        else:
+            logger.error(f"Failed to fetch account {account_id}: {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Error fetching account {account_id}: {str(e)}")
+        return None
+
+def fetch_accounts(access_token: str, page_size: int, page_number: int):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+    params = {
+        "PageSize": page_size,
+        "PageNumber": page_number,
+    }
+    
+    try:
+        response = requests.get(f"{API_URL}/api/accounts", headers=headers, params=params)
+        if response.status_code == 200:
+            return response.json().get("items", [])
+        elif response.status_code == 401:
+            logger.warning("Unauthorized: Invalid or missing access token")
+        else:
+            logger.error(f"Failed to fetch accounts: {response.text}")
+    except Exception as e:
+        logger.error(f"Error fetching accounts: {str(e)}")
+    return []
+
+def fetch_all_accounts(access_token: str, batch_size: int = 20):
+    limit: int = 100
+    accounts = []
+    page_number = 1
+    
+    while len(accounts) < limit:
+        batch = fetch_accounts(access_token, batch_size, page_number)
+        if not batch:
+            break
+        accounts.extend(batch)
+        if len(accounts) >= limit:
+            break
+        page_number += 1
+    
+    return accounts[:limit]
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
-    crm_url = f"{CRM_URL}/opportunitycustomers"
+    crm_url = f"{CRM_URL}/contacts"
     
     crm_data = {
-        "name": user_data['name'],
+        "firstname": user_data['name'],
         "emailaddress1": user_data['email'],
         "telephone1": user_data['phone'],
-        "websiteurl": "https://example.com",
-        "customer_type_code": 1  # Assuming '1' corresponds to the type of customer in CRM
     }
 
-    response = requests.post(crm_url, headers={
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }, data=json.dumps(crm_data))
+    try:
+        # Step 1: Check if the user already exists in CRM by email
+        query_url = f"{CRM_URL}/contacts?$filter=emailaddress1 eq '{user_data['email']}'"
+        response = requests.get(query_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        })
 
-    if response.status_code == 201:
-        return True
-    else:
-        print(f"Failed to migrate user {user_data['name']} to CRM. Status code: {response.status_code}")
+        if response.status_code == 200:
+            existing_contacts = response.json().get("value", [])
+            if existing_contacts:
+                # User exists → Update their information
+                contact_id = existing_contacts[0]['contactid']
+                update_url = f"{CRM_URL}/contacts({contact_id})"
+                
+                update_response = requests.patch(update_url, headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }, data=json.dumps(crm_data))
+
+                if update_response.status_code in [200, 204]:
+                    log_migration_result(
+                        user_id=user_data['id'],
+                        staging_status="authentication_success",
+                        crm_status="updated",
+                        crm_entity_updated=True,
+                        error_message=None
+                    )
+                    return True
+                else:
+                    log_migration_result(
+                        user_id=user_data['id'],
+                        staging_status="authentication_success",
+                        crm_status="update_failed",
+                        crm_entity_updated=False,
+                        error_message=f"Failed to update user in CRM. Status: {update_response.status_code}, Response: {update_response.text}"
+                    )
+                    return False
+            else:
+                # User does not exist → Create a new record
+                create_response = requests.post(crm_url, headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }, data=json.dumps(crm_data))
+
+                if create_response.status_code == 201:
+                    log_migration_result(
+                        user_id=user_data['id'],
+                        staging_status="authentication_success",
+                        crm_status="created",
+                        crm_entity_updated=True,
+                        error_message=None
+                    )
+                    return True
+                else:
+                    log_migration_result(
+                        user_id=user_data['id'],
+                        staging_status="authentication_success",
+                        crm_status="creation_failed",
+                        crm_entity_updated=False,
+                        error_message=f"Failed to create user in CRM. Status: {create_response.status_code}, Response: {create_response.text}"
+                    )
+                    return False
+        else:
+            log_migration_result(
+                user_id=user_data['id'],
+                staging_status="authentication_success",
+                crm_status="query_failed",
+                crm_entity_updated=False,
+                error_message=f"Failed to query user in CRM. Status: {response.status_code}, Response: {response.text}"
+            )
+            return False
+
+    except Exception as e:
+        log_migration_result(
+            user_id=user_data['id'],
+            staging_status="authentication_success",
+            crm_status="not_updated",
+            crm_entity_updated=False,
+            error_message=f"Error during CRM migration: {str(e)}"
+        )
+        print(f"Error during CRM migration: {str(e)}")
         return False
+
+@app.get("/api/crm-contacts-url")
+async def get_crm_contacts_url():
+    crm_contacts_url = os.getenv("CRM_CONTACTS_URL")
+    if not crm_contacts_url:
+        return JSONResponse(content={"error": "CRM contacts URL not configured"}, status_code=500)
+    return {"crmContactsUrl": crm_contacts_url}
+
 
 # Function to get CRM access token
 def get_crm_access_token():
@@ -409,27 +438,55 @@ def get_crm_access_token():
         "scope": RESOURCE,
         "grant_type": "client_credentials"
     }
-    response = requests.post(url, headers=headers, data=data)
-    token_data = response.json()
-    return token_data['access_token']
+
+    try:
+        response = requests.post(url, headers=headers, data=data)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        token_data = response.json()
+        access_token = token_data['access_token']
+        
+        # Log success
+        log_migration_result(
+            user_id=-1,  # Use -1 for system-level logs
+            staging_status="authentication_success",
+            crm_status="access_token_received",
+            crm_entity_updated=False,
+            error_message=None
+        )
+        
+        return access_token
+
+    except requests.exceptions.RequestException as e:
+        # Log failure
+        log_migration_result(
+            user_id=-1,  # Use -1 for system-level logs
+            staging_status="authentication_failure",
+            crm_status="access_token_not_received",
+            crm_entity_updated=False,
+            error_message=f"Error during token retrieval: {str(e)}"
+        )
+        print(f"Error during token retrieval: {str(e)}")
+        return None
 
 
 @app.post("/authenticate")
 async def authenticate(request: AuthRequest):
     logger.info(f"Authentication attempt for email: {request.email}")
-    
+
     try:
-        # Authenticate by email and password
-        auth_response = authenticate_by_email(request.email, request.password, request.twoFactorCode)
+        auth_response = await authenticate_by_email(request.email, request.password, request.twoFactorCode)
         
+        # Handle 2FA requirement
+        if auth_response.get("twoFactorRequired"):
+            logger.info(f"2FA required for email: {request.email}")
+            return {"twoFactorRequired": True, "message": "2FA code required"}
+
+        # Handle successful authentication
         if auth_response.get("success"):
-            # If authentication is successful, return tokens
             access_token = auth_response["accessToken"]
-            #refresh_token = auth_response.get("refreshToken")  # Ensure this is included in the response
-            
+            refresh_token = auth_response.get("refreshToken")  # This might be None
             logger.info(f"Authentication successful for email: {request.email}, Access Token: {access_token}")
-            
-            # Log successful authentication
             log_migration_result(
                 user_id=-1,  # Use -1 for system-level logs
                 staging_status="authentication_success",
@@ -437,20 +494,11 @@ async def authenticate(request: AuthRequest):
                 crm_entity_updated=False,
                 error_message=None
             )
-            
-            # Return both tokens
-            return {"access_token": access_token}
-        
-        elif auth_response.get("twoFactorRequired"):
-            # If 2FA is required, return a response indicating that
-            logger.info(f"2FA required for email: {request.email}")
-            return {"twoFactorRequired": True, "message": "2FA code required"}
-        
+            return {"access_token": access_token, "refresh_token": refresh_token}
+
+        # Handle authentication failure
         else:
-            # If authentication fails, log and raise an error
             logger.warning(f"Authentication failed for email: {request.email}")
-            
-            # Log failed authentication
             log_migration_result(
                 user_id=-1,  # Use -1 for system-level logs
                 staging_status="authentication_failed",
@@ -458,13 +506,33 @@ async def authenticate(request: AuthRequest):
                 crm_entity_updated=False,
                 error_message=auth_response.get("message", "Unknown error")
             )
-            
             raise HTTPException(status_code=401, detail=auth_response.get("message", "Authentication failed"))
-    
+
     except Exception as e:
         logger.error(f"Error during authentication: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
     
+
+
+def anonymize_data(data: str, field_type: str) -> str:
+    if not data:
+        return data
+    
+    if field_type == 'name':
+        return data[0] + "*****" if data else ""
+    
+    elif field_type == 'email':
+        local, domain = data.split('@') if '@' in data else (data, "")
+        return local[:3] + "****@" + domain if domain else local[:3] + "****"
+    
+    elif field_type == 'phone':
+        return data[:3] + "*****" if len(data) > 3 else data
+
+    return data
+
+
+
 # Function to fetch user data from the staging DB
 def get_user_from_db(user_id: int):
     db: Session = SessionLocal()
@@ -483,20 +551,85 @@ def get_user_from_db(user_id: int):
         return None
     finally:
         db.close()
-        
-@app.get("/anonymize/{user_id}")
-async def anonymize_user(user_id: int = None, access_token: str = None):
-    if user_id:
-        user_data = get_user_from_db(user_id)
-        if not user_data:
-            return JSONResponse(status_code=404, content={"success": False, "message": f"User with ID {user_id} not found"})
-        anonymized_data = anonymize_user_data(user_data)
-        return {"success": True, "anonymized_data": anonymized_data}
-    else:
-        users = fetch_all_users(access_token)
-  # Fetch all users if no user_id is provided
-        anonymized_users = [anonymize_user_data(user) for user in users]
-        return {"success": True, "anonymized_data": anonymized_users}
+
+def get_users_from_db():
+    db: Session = SessionLocal()
+    try:
+        users = db.query(User).all()  # Fetch all users
+        return [{"id": user.id, "name": user.name, "email": user.email, "phone": user.phone} for user in users]
+    except Exception as e:
+        logger.error(f"Database error: {e}")
+        return []
+    finally:
+        db.close()
+
+@app.get("/users")
+async def get_users():
+    users = get_users_from_db()
+    if not users:
+        raise HTTPException(status_code=404, detail="No users found in the staging database")
+    return users
+
+
+@app.post("/migrate")
+async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTasks):
+    results = []
+
+    for user_id in request.user_ids:
+        try:
+            user_data = get_user_from_db(user_id)
+            if not user_data:
+                raise HTTPException(status_code=404, detail=f"User {user_id} not found in staging database")
+
+            # Apply anonymization correctly
+            anonymized_data = {
+                "id": user_data["id"],
+                "name": anonymize_data(user_data["name"], "name"),
+                "email": anonymize_data(user_data["email"], "email"),
+                "phone": anonymize_data(user_data["phone"], "phone"),
+            }
+
+            log_migration_result(
+                user_id=user_id,
+                staging_status="Anonymization Success",
+                crm_status="Pending",
+                crm_entity_updated=False
+            )
+
+            # Migrate anonymized data
+            staging_status = "Success"
+            crm_status = "Success" if migrate_to_crm(anonymized_data) else "Failed"
+            crm_entity_updated = crm_status == "Success"
+
+            log_migration_result(
+                user_id=user_id,
+                staging_status=staging_status,
+                crm_status=crm_status,
+                crm_entity_updated=crm_entity_updated
+            )
+
+            results.append({
+                "user_id": user_id,
+                "staging_status": staging_status,
+                "crm_status": crm_status,
+                "action": "insert" if crm_entity_updated else "update"
+            })
+
+        except Exception as e:
+            log_migration_result(
+                user_id=user_id,
+                staging_status="Failed",
+                crm_status="Failed",
+                crm_entity_updated=False
+            )
+            results.append({
+                "user_id": user_id,
+                "staging_status": "Failed",
+                "crm_status": "Failed",
+                "error": str(e)
+            })
+    
+    return {"results": results}
 
 def log_migration_result(user_id: int, staging_status: str, crm_status: str, crm_entity_updated: bool, error_message: str = None):
     db = SessionLocal()
@@ -589,56 +722,6 @@ async def get_migration_logs():
         if connection:
             connection.close()
 
-@app.post("/migrate")
-async def migrate_users(user_ids: list[int], background_tasks: BackgroundTasks):
-    results = []
-
-    for user_id in user_ids:
-        try:
-            # Fetch user data from the staging DB
-            user_data = get_user_from_db(user_id)
-            if not user_data:
-                raise HTTPException(status_code=404, detail=f"User {user_id} not found in staging database")
-
-            # Anonymize user data before migration
-            anonymized_data = anonymize_user_data(user_data)
-
-            # Log anonymization result
-            log_migration_result(
-                user_id=user_id,
-                staging_status="Anonymization Success",
-                crm_status="Pending",  # CRM status is pending until migration is complete
-                crm_entity_updated=False
-            )
-
-            # Attempt migration
-            staging_status = "Success"
-            crm_status = "Success" if migrate_to_crm(user_data) else "Failed"
-            
-            # Determine if CRM entity was updated
-            crm_entity_updated = crm_status == "Success"
-
-            # Log migration result
-            log_migration_result(
-                user_id=user_id,
-                staging_status=staging_status,
-                crm_status=crm_status,
-                crm_entity_updated=crm_entity_updated
-            )
-
-            results.append({"user_id": user_id, "status": "Success"})
-
-        except Exception as e:
-            # Log any errors during migration
-            log_migration_result(
-                user_id=user_id,
-                staging_status="Failed",
-                crm_status="Failed",
-                crm_entity_updated=False
-            )
-            results.append({"user_id": user_id, "status": f"Failed: {str(e)}"})
-    
-    return {"results": results}
 
 # FastAPI route to serve the index.html page
 @app.get("/", response_class=HTMLResponse)
