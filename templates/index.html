@@ -206,16 +206,16 @@
 
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Migration Summary:</p><p>Total Records: ${data.total_records}</p><p>Successfully Migrated: ${data.success_count}</p><p>Updated: ${data.update_count}</p><p>Inserted: ${data.insert_count}</p><p>Failed: ${data.error_count}</p>`;
                 logsContainer.scrollTop = logsContainer.scrollHeight;
-
+                const crmContactsUrl = await getCrmContactsUrl();
+                if (crmContactsUrl) {
+                    document.getElementById("crmLink").href = crmContactsUrl;
+                    document.getElementById("crmLinkContainer").style.display = "flex";
+                } else {
+                    console.error('CRM contacts URL is not available');
+                }
                 if (data.error_count === 0) {
                     document.getElementById("migrationStatusMessage").textContent = "Complete";
-                    const crmContactsUrl = await getCrmContactsUrl();
-                    if (crmContactsUrl) {
-                        document.getElementById("crmLink").href = crmContactsUrl;
-                        document.getElementById("crmLinkContainer").style.display = "flex";
-                    } else {
-                        console.error('CRM contacts URL is not available');
-                    }
+
                 } else {
                     document.getElementById("migrationStatusMessage").textContent = "Partial Success";
                 }

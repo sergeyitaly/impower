@@ -20,6 +20,7 @@ import logging
 from sqlalchemy.orm import Session
 from typing import Optional
 import httpx
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +237,8 @@ async def fetch_and_save_users(background_tasks: BackgroundTasks, authorization:
     except Exception as e:
         logger.error(f"Error fetching and saving users: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching and saving users: {str(e)}")
+    
+    
 def save_accounts_to_staging(accounts: list):
     db = SessionLocal()
     try:
@@ -431,17 +434,21 @@ def anonymize_data(data: str, field_type: str) -> str:
         return data
 
     if field_type == 'name':
-        return data[0] + "*****" if data else ""
+        # Show the first 2 characters and anonymize the rest
+        return data[:2] + "***" if len(data) > 2 else data + "***"
     
     elif field_type == 'lastname':
-        return "*****" + data[-1] if len(data) > 1 else "*****"
+        # Show the last 2 characters and anonymize the rest
+        return "***" + data[-2:] if len(data) > 2 else "***" + data
     
     elif field_type == 'email':
+        # Show the first 3 characters of the local part and the domain
         local, domain = data.split('@') if '@' in data else (data, "")
-        return local[:3] + "****@" + domain if domain else local[:3] + "****"
+        return local[:3] + "***@" + domain if domain else local[:3] + "***"
     
     elif field_type == 'phone':
-        return data[:3] + "*****" if len(data) > 3 else data
+        # Show the first 4 characters and anonymize the rest
+        return data[:4] + "****" if len(data) > 4 else data + "****"
 
     return data
 
@@ -485,28 +492,34 @@ async def get_users():
         raise HTTPException(status_code=404, detail="No users found in the staging database")
     return users
 
-
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
     crm_url = f"{CRM_URL}/contacts"
-    
+
     crm_data = {
         "firstname": user_data['name'],
         "lastname": user_data['lastname'],
-        "emailaddress1": user_data['email'],  # Anonymized email
+        "emailaddress1": user_data['email'],  
         "telephone1": user_data['phone'],
     }
 
     try:
-        # Step 1: Check if the user already exists in CRM by anonymized email
-        query_url = f"{CRM_URL}/contacts?$filter=emailaddress1 eq '{user_data['email']}'"  # Use anonymized email
+        # Step 1: Properly encode the anonymized email for the query
+        encoded_email = quote(user_data['email'])
+        query_url = f"{CRM_URL}/contacts?$filter=emailaddress1 eq '{encoded_email}'"
+        
         response = requests.get(query_url, headers={
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         })
 
         if response.status_code == 200:
-            existing_contacts = response.json().get("value", [])
+            try:
+                existing_contacts = response.json().get("value", [])
+            except Exception as e:
+                logger.error(f"Error parsing CRM response: {str(e)}")
+                return {"success": False, "action": "query_failed", "error": str(e)}
+
             if existing_contacts:
                 # User exists → Update their information
                 contact_id = existing_contacts[0]['contactid']
@@ -521,7 +534,8 @@ def migrate_to_crm(user_data: dict):
                     logger.info(f"Successfully updated contact {contact_id} in CRM.")
                     return {"success": True, "action": "updated"}
                 else:
-                    logger.error(f"Failed to update contact {contact_id} in CRM. Status code: {update_response.status_code}")
+                    logger.error(f"Failed to update contact {contact_id} in CRM. "
+                                 f"Status code: {update_response.status_code}, Response: {update_response.text}")
                     return {"success": False, "action": "update_failed"}
             else:
                 # User does not exist → Create a new record
@@ -530,18 +544,21 @@ def migrate_to_crm(user_data: dict):
                     "Content-Type": "application/json"
                 }, data=json.dumps(crm_data))
 
-                if create_response.status_code == 201:
-                    logger.info(f"Successfully inserted new contact into CRM.")
+                if create_response.status_code in [200, 201, 204]:  # Allow multiple success codes
+                    logger.info(f"Successfully inserted new contact into CRM. Response: {create_response.text}")
                     return {"success": True, "action": "inserted"}
                 else:
-                    logger.error(f"Failed to insert new contact into CRM. Status code: {create_response.status_code}, Response: {create_response.text}")
+                    logger.error(f"Failed to insert new contact into CRM. "
+                                f"Status code: {create_response.status_code}, Response: {create_response.text}")
                     return {"success": False, "action": "creation_failed"}
         else:
             logger.error(f"Failed to query CRM for existing contacts. Status code: {response.status_code}, Response: {response.text}")
             return {"success": False, "action": "query_failed"}
+
     except Exception as e:
         logger.error(f"An error occurred while migrating user data to CRM: {str(e)}")
         return {"success": False, "action": "error", "error": str(e)}
+    
 
 class MigrateResponse(BaseModel):
     total_records: int
@@ -553,7 +570,6 @@ class MigrateResponse(BaseModel):
 
 
 @app.post("/migrate", response_model=MigrateResponse)
-
 async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTasks):
     total_records = len(request.user_ids)
     success_count = 0
