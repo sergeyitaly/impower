@@ -202,12 +202,16 @@ input:focus {
         font-size: 14px;
     }
 }
+
 .migration-summary {
     margin-top: 20px;
+    overflow-x: auto; /* Enable horizontal scrolling */
+    width: 100%; /* Ensure the container takes full width */
 }
 
 #migrationSummaryTable {
-    width: 100%;
+    width: auto; /* Allow the table to expand as needed */
+    min-width: 100%; /* Ensure the table takes at least the full width of its container */
     border-collapse: collapse;
     margin-top: 10px;
 }
@@ -216,12 +220,37 @@ input:focus {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: left;
+    white-space: nowrap; /* Prevent text from wrapping */
 }
 
 #migrationSummaryTable th {
     background-color: #f4f4f4;
 }
 
+
+#migrationSummaryTable thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f4f4f4; /* Ensure the header is visible */
+    z-index: 1; /* Ensure the header stays above the table body */
+}
+
+.migration-summary::-webkit-scrollbar {
+    height: 8px; /* Height of the horizontal scrollbar */
+}
+
+.migration-summary::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Color of the scrollbar track */
+}
+
+.migration-summary::-webkit-scrollbar-thumb {
+    background: #888; /* Color of the scrollbar thumb */
+    border-radius: 4px; /* Rounded corners for the scrollbar thumb */
+}
+
+.migration-summary::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Color of the scrollbar thumb on hover */
+}
 /* Initially hidden */
 .excel-download {
     display: none; /* Hidden by default */
