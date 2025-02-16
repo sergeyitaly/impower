@@ -202,3 +202,62 @@ input:focus {
         font-size: 14px;
     }
 }
+.migration-summary {
+    margin-top: 20px;
+}
+
+#migrationSummaryTable {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+#migrationSummaryTable th, #migrationSummaryTable td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+#migrationSummaryTable th {
+    background-color: #f4f4f4;
+}
+
+/* Initially hidden */
+.excel-download {
+    display: none; /* Hidden by default */
+    align-items: center;
+    font-size: 16px;
+    font-weight: 500;
+    color: #217346;  /* Excel green */
+    background: #e6f5ec; /* Light green background */
+    padding: 10px 15px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    border: 1px solid #217346;
+    width: fit-content;
+}
+
+.excel-download i {
+    color: #217346; /* Excel green */
+    font-size: 18px;
+    margin-right: 8px;
+}
+
+.excel-download a {
+    text-decoration: none;
+    color: inherit;
+    font-weight: bold;
+}
+
+.excel-download:hover {
+    background: #217346;
+    color: #ffffff;
+}
+
+.excel-download:hover i {
+    color: #ffffff;
+}
+
+.excel-download a:hover {
+    color: #ffffff;
+}

@@ -21,6 +21,10 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import httpx
 from urllib.parse import quote
+from openpyxl import Workbook
+from fastapi.responses import FileResponse
+import time
+
 
 logger = logging.getLogger(__name__)
 
@@ -560,14 +564,47 @@ def migrate_to_crm(user_data: dict):
         return {"success": False, "action": "error", "error": str(e)}
     
 
+def export_to_excel(data: list, entity_name: str) -> str:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = entity_name
+    if data:
+        headers = list(data[0].keys())
+        ws.append(headers)
+    for row in data:
+        anonymized_row = {
+            "id": row["id"],
+            "name": anonymize_data(row["name"], "name"),
+            "lastname": anonymize_data(row["lastname"], "lastname"),
+            "email": anonymize_data(row["email"], "email"),
+            "phone": anonymize_data(row["phone"], "phone"),
+        }
+        ws.append(list(anonymized_row.values()))
+    file_path = f"{entity_name}_export.xlsx"
+    wb.save(file_path)
+    return file_path
+
+def delete_file_after_delay(file_path: str, delay: int = 60):
+    time.sleep(delay)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+@app.get("/download-excel/{file_name}")
+async def download_excel(file_name: str):
+    file_path = f"./{file_name}"
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, filename=file_name)
+
 class MigrateResponse(BaseModel):
     total_records: int
     success_count: int
     error_count: int
     update_count: int
     insert_count: int
+    entity_name: str  
     results: List[dict]
-
+    excel_file_url: str
 
 @app.post("/migrate", response_model=MigrateResponse)
 async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTasks):
@@ -577,6 +614,8 @@ async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTas
     update_count = 0
     insert_count = 0
     results = []
+    entity_name = "Account"  # Replace with dynamic entity name if needed
+    data_to_export = []  # List to store data for Excel export
 
     for user_id in request.user_ids:
         try:
@@ -585,6 +624,9 @@ async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTas
             if not user_data:
                 logger.error(f"User {user_id} not found in staging database")
                 raise HTTPException(status_code=404, detail=f"User {user_id} not found in staging database")
+
+            # Add user data to the export list
+            data_to_export.append(user_data)
 
             # Step 2: Apply anonymization to user data
             anonymized_data = {
@@ -657,6 +699,10 @@ async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTas
                 "error": str(e)
             })
     
+    # Export data to Excel
+    excel_file_path = export_to_excel(data_to_export, entity_name)
+    background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
+
     # Return the final migration summary
     return {
         "total_records": total_records,
@@ -664,8 +710,11 @@ async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTas
         "error_count": error_count,
         "update_count": update_count,
         "insert_count": insert_count,
-        "results": results
+        "entity_name": entity_name,
+        "results": results,
+        "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"  # URL to download the Excel file
     }
+
 
 def log_migration_result(user_id: int, staging_status: str, crm_status: str, crm_entity_updated: bool, error_message: str = None):
     db = SessionLocal()
