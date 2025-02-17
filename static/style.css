@@ -6,19 +6,18 @@
     font-family: 'Arial', sans-serif;
 }
 
-/* Body and container */
+/* Body & Container */
 body {
-    background-color: #f4f4f9;
+    background: #f4f4f9;
     color: #333;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
-    margin: 0;
 }
 
 .container {
-    background-color: #fff;
+    background: #fff;
     padding: 30px;
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
@@ -27,13 +26,13 @@ body {
     text-align: center;
 }
 
+/* Typography */
 h1 {
     font-size: 24px;
-    color: #333;
     margin-bottom: 20px;
 }
 
-/* Form styles */
+/* Form */
 .form-group {
     margin-bottom: 15px;
     text-align: left;
@@ -42,7 +41,6 @@ h1 {
 label {
     font-size: 14px;
     color: #555;
-    margin-bottom: 5px;
     display: block;
 }
 
@@ -60,67 +58,66 @@ input:focus {
     border-color: #4a90e2;
 }
 
+/* Buttons */
 .btn {
-    background-color: #4a90e2;
-    color: white;
-    padding: 12px 20px;
+    background: #4a90e2;
+    color: #fff;
+    padding: 12px;
     font-size: 16px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.3s ease;
+    transition: 0.3s;
+    width: 100%;
 }
 
 .btn:hover {
-    background-color: #357ab7;
+    background: #357ab7;
 }
 
 .btn i {
     margin-right: 8px;
 }
 
-/* Migration Progress */
+/* Progress Bar */
 .progress-container {
     margin-top: 30px;
     display: none;
 }
 
 .progress-bar {
-    background-color: #f0f0f0;
+    background: #f0f0f0;
     border-radius: 5px;
     height: 20px;
-    margin: 10px 0;
     overflow: hidden;
 }
 
 .progress {
-    background-color: #4a90e2;
+    background: #4a90e2;
     height: 100%;
     width: 0;
-    transition: width 0.5s ease;
+    transition: width 0.5s;
 }
 
 /* Status Cards */
 .status-cards {
     margin-top: 20px;
     display: flex;
-    justify-content: space-between;
     gap: 20px;
+    justify-content: space-between;
     display: none;
 }
 
 .card {
-    background-color: #fff;
+    background: #fff;
     padding: 15px;
     border-radius: 10px;
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
     width: 48%;
     text-align: center;
-    font-size: 16px;
 }
 
 .card i {
@@ -129,7 +126,7 @@ input:focus {
     margin-bottom: 10px;
 }
 
-/* Logs Section */
+/* Logs */
 .logs {
     margin-top: 20px;
     display: none;
@@ -139,30 +136,28 @@ input:focus {
 #logsContainer {
     margin-top: 10px;
     padding: 10px;
-    background-color: #f9f9f9;
+    background: #f9f9f9;
     border-radius: 5px;
     max-height: 200px;
     overflow-y: auto;
     font-family: monospace;
     font-size: 14px;
-    color: #555;
 }
 
 #toggleLogs {
     margin-top: 10px;
-    background-color: #f4f4f9;
-    color: #333;
+    background: #f4f4f9;
     border: 1px solid #ddd;
     padding: 10px;
     cursor: pointer;
     width: 100%;
     border-radius: 5px;
     font-size: 14px;
-    transition: background-color 0.3s ease;
+    transition: 0.3s;
 }
 
 #toggleLogs:hover {
-    background-color: #e3e3e3;
+    background: #e3e3e3;
 }
 
 /* CRM Link */
@@ -182,92 +177,70 @@ input:focus {
     text-decoration: underline;
 }
 
-/* Responsive Styles */
-@media (max-width: 768px) {
-    .container {
-        padding: 20px;
-        width: 90%;
-    }
-
-    .status-cards {
-        flex-direction: column;
-    }
-
-    .card {
-        width: 100%;
-        margin-bottom: 15px;
-    }
-
-    #crmLink {
-        font-size: 14px;
-    }
-}
-
+/* Migration Summary */
 .migration-summary {
     margin-top: 20px;
-    overflow-x: auto; /* Enable horizontal scrolling */
-    width: 100%; /* Ensure the container takes full width */
+    overflow-x: auto;
+    width: 100%;
 }
 
 #migrationSummaryTable {
-    width: auto; /* Allow the table to expand as needed */
-    min-width: 100%; /* Ensure the table takes at least the full width of its container */
+    width: auto;
+    min-width: 100%;
     border-collapse: collapse;
     margin-top: 10px;
 }
 
-#migrationSummaryTable th, #migrationSummaryTable td {
+#migrationSummaryTable th, 
+#migrationSummaryTable td {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: left;
-    white-space: nowrap; /* Prevent text from wrapping */
+    white-space: nowrap;
 }
-
-#migrationSummaryTable th {
-    background-color: #f4f4f4;
-}
-
 
 #migrationSummaryTable thead th {
+    background: #f4f4f4;
     position: sticky;
     top: 0;
-    background-color: #f4f4f4; /* Ensure the header is visible */
-    z-index: 1; /* Ensure the header stays above the table body */
+    z-index: 1;
 }
 
+/* Scrollbar */
 .migration-summary::-webkit-scrollbar {
-    height: 8px; /* Height of the horizontal scrollbar */
+    height: 8px;
 }
 
 .migration-summary::-webkit-scrollbar-track {
-    background: #f1f1f1; /* Color of the scrollbar track */
+    background: #f1f1f1;
 }
 
 .migration-summary::-webkit-scrollbar-thumb {
-    background: #888; /* Color of the scrollbar thumb */
-    border-radius: 4px; /* Rounded corners for the scrollbar thumb */
+    background: #888;
+    border-radius: 4px;
 }
 
 .migration-summary::-webkit-scrollbar-thumb:hover {
-    background: #555; /* Color of the scrollbar thumb on hover */
+    background: #555;
 }
-/* Initially hidden */
+
+/* Excel Download */
 .excel-download {
-    display: none; /* Hidden by default */
+    display: none;
     align-items: center;
     font-size: 16px;
     font-weight: 500;
-    color: #217346;  /* Excel green */
-    background: #e6f5ec; /* Light green background */
+    color: #217346;
+    background: #e6f5ec;
     padding: 10px 15px;
     border-radius: 8px;
-    transition: all 0.3s ease;
+    transition: 0.3s;
     border: 1px solid #217346;
     width: fit-content;
 }
 
 .excel-download i {
-    color: #217346; /* Excel green */
+    color: #217346;
     font-size: 18px;
     margin-right: 8px;
 }
@@ -280,13 +253,31 @@ input:focus {
 
 .excel-download:hover {
     background: #217346;
-    color: #ffffff;
+    color: #fff;
 }
 
-.excel-download:hover i {
-    color: #ffffff;
-}
-
+.excel-download:hover i,
 .excel-download a:hover {
-    color: #ffffff;
+    color: #fff;
 }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .container {
+        padding: 20px;
+        width: 90%;
+    }
+
+    .status-cards {
+        flex-direction: column;
+    }
+
+    .card {
+        width: 100%;
+    }
+
+    #crmLink {
+        font-size: 14px;
+    }
+}
+
