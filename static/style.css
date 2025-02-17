@@ -176,17 +176,19 @@ input:focus {
 #crmLink:hover {
     text-decoration: underline;
 }
-
-/* Migration Summary */
+/* Migration Summary Container */
 .migration-summary {
     margin-top: 20px;
     overflow-x: auto;
     width: 100%;
+    max-width: 100%; /* Ensure it doesn't exceed the container's width */
+    box-sizing: border-box; /* Ensure padding and borders don't affect the layout */
 }
 
+/* Table Styling */
 #migrationSummaryTable {
-    width: auto;
-    min-width: 100%;
+    width: 100%; /* Set to 100% width to fit the container */
+    table-layout: fixed; /* Ensure that table layout is fixed and columns adjust accordingly */
     border-collapse: collapse;
     margin-top: 10px;
 }
@@ -197,6 +199,8 @@ input:focus {
     padding: 8px;
     text-align: left;
     white-space: nowrap;
+    overflow: hidden; /* Avoid text overflow in cells */
+    text-overflow: ellipsis; /* Add ellipsis for long text */
 }
 
 #migrationSummaryTable thead th {

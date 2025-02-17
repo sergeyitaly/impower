@@ -24,6 +24,8 @@ from urllib.parse import quote
 from openpyxl import Workbook
 from fastapi.responses import FileResponse
 import time
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Table
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,169 @@ class AuthRequest(BaseModel):
 class DataResponse(BaseModel):
     success: bool
     data: List[dict]
+
+
+# List of known entities
+FACILIOO_ENTITIES = [
+    "Accounts", "AccountContactDetails", "AccountGroup", "AccountPermission",
+    "ActivityAttempt", "Attendance", "Attribute", "AttributeGroup", "AttributeGroupType",
+    "AttributeValue", "Auth", "BankAccount", "BillingAddress", "BookingAccountItemV",
+    "BookingAccountV", "ChatGptSettings", "Color", "Conference", "ConferenceDocumentSettings",
+    "ConferenceDocumentTemplate", "ConferenceSettings", "ConsumptionBrand", "ConsumptionMeter",
+    "ConsumptionReading", "ConsumptionReadingDate", "ConsumptionReadingExtended",
+    "ConsumptionType", "ContactDetail", "ContactType", "CustomerApp", "CustomerAppCustomContent",
+    "Documents", "DocumentGroup", "DocumentShare", "DocuWare", "Entrance", "ErpImport",
+    "Faq", "FaqGroup", "FaqGroupVisual", "Files", "FileType", "GenericPartySetting",
+    "HealthCheck", "Inquiries", "InquiryCategory", "InquirySource", "Mandate", "NearbyPlacesCategory",
+    "Notice", "Pantaenius", "Party", "PredefinedVote", "Process", "ProcessFeed", "ProcessFeedType",
+    "ProcessInsuranceClaim", "ProcessNotification", "ProcessType", "Properties", "PropertyEmergencyContact",
+    "PropertyManagementCompany", "PropertyManager", "PropertyRole", "PropertyRoleDefault",
+    "Resolution", "ResolutionOption", "ResolutionOptionTemplate", "ResolutionTemplate",
+    "Signee", "SmartLock", "SmartLockType", "SumVote", "Tenant", "Term", "Topic", "TopicNote",
+    "TopicTemplate", "TopicTemplateResolutionTemplates", "Trade", "Units", "UnitContract",
+    "UnitContractType", "UnitType", "UserTask", "UserTaskCollection", "UserTaskNotification",
+    "UserTaskPriority", "Vote", "VotingEndReason", "VotingGroup", "VotingGroupVote",
+    "VotingMajority", "VotingProcedure", "VotingSession", "Webhook", "WebhookAttempt",
+    "WebhookEvent", "WebhookRegistration", "WorkOrder", "WorkOrderAppointmentRequest",
+    "WorkOrderAppointmentRequestDate", "WorkOrderFeedEntry", "WorkOrderStatus", "WorkOrderType"
+]
+
+def fetch_entities_metadata(access_token: str):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+
+    entities_metadata = []
+    for entity_name in FACILIOO_ENTITIES:
+        try:
+            metadata_response = requests.get(f"{API_URL}/api/{entity_name}/metadata", headers=headers)
+            if metadata_response.status_code == 200:
+                metadata = metadata_response.json()
+                attributes = metadata.get("attributes", [])
+                if not attributes:
+                    logger.warning(f"No attributes found for entity {entity_name}. Skipping.")
+                entities_metadata.append({
+                    "name": entity_name,
+                    "attributes": attributes  # Ensure all attributes are collected
+                })
+            else:
+                logger.error(f"Failed to fetch metadata for entity {entity_name}: {metadata_response.text}")
+        except Exception as e:
+            logger.error(f"Error fetching metadata for entity {entity_name}: {str(e)}")
+
+    return entities_metadata
+
+
+def create_tables_for_entities(entities_metadata: list):
+    metadata = MetaData()
+    db = SessionLocal()
+
+    try:
+        for entity in entities_metadata:
+            entity_name = entity["name"]
+            attributes = entity["attributes"]
+
+            columns = [Column("id", Integer, primary_key=True)]
+            for attr in attributes:
+                attr_name = attr.get("name")
+                attr_type = attr.get("type")
+
+                # Map Facilioo attribute types to SQLAlchemy types
+                if attr_type == "string":
+                    columns.append(Column(attr_name, String))
+                elif attr_type == "integer":
+                    columns.append(Column(attr_name, Integer))
+                elif attr_type == "json":
+                    columns.append(Column(attr_name, JSONB))
+                elif attr_type == "boolean":
+                    columns.append(Column(attr_name, Boolean))  # Adding boolean handling
+                elif attr_type == "datetime":
+                    columns.append(Column(attr_name, DateTime))  # Handling DateTime
+
+            table = Table(entity_name, metadata, *columns)
+            metadata.create_all(engine)  # Create the table in the DB
+            logger.info(f"Created table for entity: {entity_name}")
+    except Exception as e:
+        logger.error(f"Error creating tables: {str(e)}")
+        db.rollback()
+    finally:
+        db.close()
+
+def fetch_and_save_entity_data(access_token: str, entity_name: str):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+
+    try:
+        response = requests.get(f"{API_URL}/api/{entity_name}", headers=headers)
+        if response.status_code != 200:
+            logger.error(f"Failed to fetch data for entity {entity_name}: {response.text}")
+            return
+
+        entity_data = response.json().get("items", [])
+        db = SessionLocal()
+
+        try:
+            for record in entity_data:
+                record_dict = {k: v for k, v in record.items() if k != "id"}
+                
+                stmt = text(f"""
+                    INSERT INTO {entity_name} (id, {', '.join(record_dict.keys())})
+                    VALUES (:id, {', '.join([f':{k}' for k in record_dict.keys()])})
+                    ON CONFLICT (id) DO UPDATE SET
+                    {', '.join([f"{k} = EXCLUDED.{k}" for k in record_dict.keys()])}
+                """)
+                db.execute(stmt, {"id": record["id"], **record_dict})
+
+            db.commit()
+            logger.info(f"Saved {len(entity_data)} records for entity {entity_name}")
+        except Exception as e:
+            logger.error(f"Error saving data for entity {entity_name}: {str(e)}")
+            db.rollback()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error fetching data for entity {entity_name}: {str(e)}")
+
+app = FastAPI()
+
+@app.post("/fetch-and-save-all-entities")
+async def fetch_and_save_all_entities(background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    access_token = authorization.split("Bearer ")[1]
+
+    try:
+        entities_metadata = fetch_entities_metadata(access_token)
+        if not entities_metadata:
+            raise HTTPException(status_code=404, detail="No entities found")
+
+        create_tables_for_entities(entities_metadata)
+
+        for entity in entities_metadata:
+            background_tasks.add_task(fetch_and_save_entity_data, access_token, entity["name"])
+
+        # Return the list of entity names being processed
+        entity_names = [entity["name"] for entity in entities_metadata]
+        return {"success": True, "message": "Entities metadata fetched and tables created successfully", "entities": entity_names}
+    except Exception as e:
+        logger.error(f"Error fetching and saving all entities: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching and saving all entities: {str(e)}")
+
+
+
+
+
+
+
+
+
+
 
 # Helper function to generate a random string for anonymization
 def random_string(length=8):
