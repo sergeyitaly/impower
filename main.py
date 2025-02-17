@@ -24,8 +24,11 @@ from urllib.parse import quote
 from openpyxl import Workbook
 from fastapi.responses import FileResponse
 import time
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Table
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Table, Float
 from sqlalchemy.dialects.postgresql import JSONB
+from fastapi.responses import StreamingResponse
+from sqlalchemy.exc import SQLAlchemyError
 
 
 logger = logging.getLogger(__name__)
@@ -84,93 +87,76 @@ class DataResponse(BaseModel):
     data: List[dict]
 
 
-# List of known entities
+
 FACILIOO_ENTITIES = [
-    "Accounts", "AccountContactDetails", "AccountGroup", "AccountPermission",
-    "ActivityAttempt", "Attendance", "Attribute", "AttributeGroup", "AttributeGroupType",
-    "AttributeValue", "Auth", "BankAccount", "BillingAddress", "BookingAccountItemV",
-    "BookingAccountV", "ChatGptSettings", "Color", "Conference", "ConferenceDocumentSettings",
-    "ConferenceDocumentTemplate", "ConferenceSettings", "ConsumptionBrand", "ConsumptionMeter",
-    "ConsumptionReading", "ConsumptionReadingDate", "ConsumptionReadingExtended",
-    "ConsumptionType", "ContactDetail", "ContactType", "CustomerApp", "CustomerAppCustomContent",
-    "Documents", "DocumentGroup", "DocumentShare", "DocuWare", "Entrance", "ErpImport",
-    "Faq", "FaqGroup", "FaqGroupVisual", "Files", "FileType", "GenericPartySetting",
-    "HealthCheck", "Inquiries", "InquiryCategory", "InquirySource", "Mandate", "NearbyPlacesCategory",
-    "Notice", "Pantaenius", "Party", "PredefinedVote", "Process", "ProcessFeed", "ProcessFeedType",
-    "ProcessInsuranceClaim", "ProcessNotification", "ProcessType", "Properties", "PropertyEmergencyContact",
-    "PropertyManagementCompany", "PropertyManager", "PropertyRole", "PropertyRoleDefault",
-    "Resolution", "ResolutionOption", "ResolutionOptionTemplate", "ResolutionTemplate",
-    "Signee", "SmartLock", "SmartLockType", "SumVote", "Tenant", "Term", "Topic", "TopicNote",
-    "TopicTemplate", "TopicTemplateResolutionTemplates", "Trade", "Units", "UnitContract",
-    "UnitContractType", "UnitType", "UserTask", "UserTaskCollection", "UserTaskNotification",
-    "UserTaskPriority", "Vote", "VotingEndReason", "VotingGroup", "VotingGroupVote",
-    "VotingMajority", "VotingProcedure", "VotingSession", "Webhook", "WebhookAttempt",
-    "WebhookEvent", "WebhookRegistration", "WorkOrder", "WorkOrderAppointmentRequest",
-    "WorkOrderAppointmentRequestDate", "WorkOrderFeedEntry", "WorkOrderStatus", "WorkOrderType"
+    "accounts", "account-contact-details", "account-groups", "account-permissions",
+    "activity-attempts", "attendances", "attributes", "attribute-groups", "attribute-group-types",
+    "attribute-values", "auths", "bank-accounts", "billing-addresses", "booking-account-item-vs",
+    "booking-account-vs", "chatgpt-settings", "colors", "conferences", "conference-document-settings",
+    "conference-document-templates", "conference-settings", "consumption-brands", "consumption-meters",
+    "consumption-readings", "consumption-reading-dates", "consumption-reading-extendeds",
+    "consumption-types", "contact-details", "contact-types", "customer-apps", "customer-app-custom-contents",
+    "documents", "document-groups", "document-shares", "docuwares", "entrances", "erp-imports",
+    "faqs", "faq-groups", "faq-group-visuals", "files", "file-types", "generic-party-settings",
+    "health-checks", "inquiries", "inquiry-categories", "inquiry-sources", "mandates", "nearby-places-categories",
+    "notices", "pantaeniuses", "parties", "predefined-votes", "processes", "process-feeds", "process-feed-types",
+    "process-insurance-claims", "process-notifications", "process-types", "properties", "property-emergency-contacts",
+    "property-management-companies", "property-managers", "property-roles", "property-role-defaults",
+    "resolutions", "resolution-options", "resolution-option-templates", "resolution-templates",
+    "signees", "smart-locks", "smart-lock-types", "sum-votes", "tenants", "terms", "topics", "topic-notes",
+    "topic-templates", "topic-template-resolution-templates", "trades", "units", "unit-contracts",
+    "unit-contract-types", "unit-types", "user-tasks", "user-task-collections", "user-task-notifications",
+    "user-task-priorities", "votes", "voting-end-reasons", "voting-groups", "voting-group-votes",
+    "voting-majorities", "voting-procedures", "voting-sessions", "webhooks", "webhook-attempts",
+    "webhook-events", "webhook-registrations", "work-orders", "work-order-appointment-requests",
+    "work-order-appointment-request-dates", "work-order-feed-entries", "work-order-statuses", "work-order-types"
 ]
+#FACILIOO_ENTITIES = [entity.replace("-", "_") for entity in FACILIOO_ENTITIES]
+@app.get("/facilioo-entities")
+async def get_facilioo_entities():
+    return FACILIOO_ENTITIES
 
-def fetch_entities_metadata(access_token: str):
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
-    }
+def is_boolean_column(column_name: str) -> bool:
+    return column_name.startswith(("is", "has", "can", "should", "allow"))
 
-    entities_metadata = []
-    for entity_name in FACILIOO_ENTITIES:
-        try:
-            metadata_response = requests.get(f"{API_URL}/api/{entity_name}/metadata", headers=headers)
-            if metadata_response.status_code == 200:
-                metadata = metadata_response.json()
-                attributes = metadata.get("attributes", [])
-                if not attributes:
-                    logger.warning(f"No attributes found for entity {entity_name}. Skipping.")
-                entities_metadata.append({
-                    "name": entity_name,
-                    "attributes": attributes  # Ensure all attributes are collected
-                })
-            else:
-                logger.error(f"Failed to fetch metadata for entity {entity_name}: {metadata_response.text}")
-        except Exception as e:
-            logger.error(f"Error fetching metadata for entity {entity_name}: {str(e)}")
+def infer_schema_from_record(record: dict) -> list:
+    columns = [Column("id", Integer, primary_key=True)]
+    for key, value in record.items():
+        if key == "id":
+            continue  # Skip the primary key
+        column_name = key.lower()  # Convert column name to lowercase
+        if value is None:
+            logger.warning(f"Column {column_name} has a None value. Defaulting to String.")
+            columns.append(Column(column_name, String))
+        elif isinstance(value, str):
+            columns.append(Column(column_name, String))
+        elif isinstance(value, int):
+            columns.append(Column(column_name, Integer))
+        elif isinstance(value, bool):
+            columns.append(Column(column_name, Boolean))
+        elif isinstance(value, (dict, list)):
+            columns.append(Column(column_name, JSONB))
+        elif isinstance(value, float):
+            columns.append(Column(column_name, Float))
+        elif isinstance(value, datetime):
+            columns.append(Column(column_name, DateTime))
+        else:
+            logger.warning(f"Unknown type for column {column_name}: {type(value)}. Defaulting to String.")
+            columns.append(Column(column_name, String))  # Default to String for unknown types
+    return columns
 
-    return entities_metadata
-
-
-def create_tables_for_entities(entities_metadata: list):
+def create_table_for_entity(entity_name: str, sample_record: dict):
     metadata = MetaData()
-    db = SessionLocal()
-
+    columns = infer_schema_from_record(sample_record)
+    table = Table(entity_name.lower(), metadata, *columns)
     try:
-        for entity in entities_metadata:
-            entity_name = entity["name"]
-            attributes = entity["attributes"]
-
-            columns = [Column("id", Integer, primary_key=True)]
-            for attr in attributes:
-                attr_name = attr.get("name")
-                attr_type = attr.get("type")
-
-                # Map Facilioo attribute types to SQLAlchemy types
-                if attr_type == "string":
-                    columns.append(Column(attr_name, String))
-                elif attr_type == "integer":
-                    columns.append(Column(attr_name, Integer))
-                elif attr_type == "json":
-                    columns.append(Column(attr_name, JSONB))
-                elif attr_type == "boolean":
-                    columns.append(Column(attr_name, Boolean))  # Adding boolean handling
-                elif attr_type == "datetime":
-                    columns.append(Column(attr_name, DateTime))  # Handling DateTime
-
-            table = Table(entity_name, metadata, *columns)
-            metadata.create_all(engine)  # Create the table in the DB
-            logger.info(f"Created table for entity: {entity_name}")
+        metadata.create_all(engine)
+        logger.info(f"Created table for entity: {entity_name.lower()}")
+        logger.info(f"Table schema: {[col.name for col in columns]}")
+        return [col.name for col in columns]  # Return the list of column names
     except Exception as e:
-        logger.error(f"Error creating tables: {str(e)}")
-        db.rollback()
-    finally:
-        db.close()
+        logger.error(f"Error creating table for entity {entity_name.lower()}: {str(e)}")
+        raise  # Re-raise the exception to stop further execution
 
 def fetch_and_save_entity_data(access_token: str, entity_name: str):
     headers = {
@@ -179,73 +165,141 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
         "api-version": "1.0",
     }
 
+    # Pagination settings
+    page_size = 20  # Number of records per page
+    page_number = 1   # Start with the first page
+    total_records = 0
+    table_name = None  # Initialize table_name outside the try block
+    inferred_columns = []  # Store inferred columns
+
     try:
-        response = requests.get(f"{API_URL}/api/{entity_name}", headers=headers)
-        if response.status_code != 200:
-            logger.error(f"Failed to fetch data for entity {entity_name}: {response.text}")
-            return
+        while True:
+            # Fetch data for the current page
+            logger.info(f"Fetching page {page_number} for entity: {entity_name}")
+            response = requests.get(
+                f"{API_URL}/api/{entity_name}",
+                headers=headers,
+                params={
+                    "PageSize": page_size,
+                    "PageNumber": page_number,
+                    "AscendingOrder": True,
+                },
+            )
 
-        entity_data = response.json().get("items", [])
-        db = SessionLocal()
+            if response.status_code != 200:
+                logger.error(f"Failed to fetch data for entity {entity_name}: {response.text}")
+                break
 
-        try:
-            for record in entity_data:
-                record_dict = {k: v for k, v in record.items() if k != "id"}
-                
-                stmt = text(f"""
-                    INSERT INTO {entity_name} (id, {', '.join(record_dict.keys())})
-                    VALUES (:id, {', '.join([f':{k}' for k in record_dict.keys()])})
-                    ON CONFLICT (id) DO UPDATE SET
-                    {', '.join([f"{k} = EXCLUDED.{k}" for k in record_dict.keys()])}
-                """)
-                db.execute(stmt, {"id": record["id"], **record_dict})
+            entity_data = response.json().get("items", [])
+            if not entity_data:
+                logger.info(f"No more data found for entity {entity_name}.")
+                break
 
-            db.commit()
-            logger.info(f"Saved {len(entity_data)} records for entity {entity_name}")
-        except Exception as e:
-            logger.error(f"Error saving data for entity {entity_name}: {str(e)}")
-            db.rollback()
-        finally:
-            db.close()
+            # Replace hyphens with underscores in the table name
+            table_name = entity_name.lower().replace("-", "_")
+
+            # Infer schema from the first page (if not already done)
+            if page_number == 1:
+                sample_record = {}
+                for record in entity_data:
+                    sample_record.update(record)  # Merge all fields into sample_record
+
+                # Create the table and get inferred columns
+                logger.info(f"Creating table for entity: {table_name}")
+                inferred_columns = create_table_for_entity(table_name, sample_record)
+
+            # Save data to the database
+            db = SessionLocal()
+            try:
+                logger.info(f"Saving {len(entity_data)} records from page {page_number} for entity {table_name}")
+                for record in entity_data:
+                    record_dict = {k.lower(): v for k, v in record.items() if k != "id"}  # Convert keys to lowercase
+
+                    # Cast boolean values to integer for all boolean-like columns
+                    for column_name, value in record_dict.items():
+                        if is_boolean_column(column_name) and isinstance(value, bool):
+                            record_dict[column_name] = int(value)
+
+                    # Serialize dictionary values to JSON
+                    for column_name, value in record_dict.items():
+                        if isinstance(value, dict):
+                            record_dict[column_name] = json.dumps(value)
+
+                    # Escape reserved keywords in column names
+                    escaped_columns = [f'"{col}"' if col.lower() == "order" else col for col in record_dict.keys()]
+
+                    stmt = text(f"""
+                        INSERT INTO {table_name} (id, {', '.join(escaped_columns)})
+                        VALUES (:id, {', '.join([f':{k}' for k in record_dict.keys()])})
+                        ON CONFLICT (id) DO UPDATE SET
+                        {', '.join([f'"{col}" = EXCLUDED."{col}"' if col.lower() == "order" else f"{col} = EXCLUDED.{col}" for col in record_dict.keys()])}
+                    """)
+                    logger.debug(f"Executing SQL: {stmt}")
+                    db.execute(stmt, {"id": record["id"], **record_dict})
+
+                db.commit()
+                total_records += len(entity_data)
+                logger.info(f"Successfully saved {len(entity_data)} records from page {page_number} for entity {table_name}")
+            except Exception as e:
+                logger.error(f"Error saving data for entity {table_name if table_name else entity_name}: {str(e)}")
+                db.rollback()
+            finally:
+                db.close()
+
+            # Move to the next page
+            page_number += 1
+
+        logger.info(f"Total records saved for entity {table_name if table_name else entity_name}: {total_records}")
+        return {"success": True, "columns": inferred_columns, "total_records": total_records}  # Return inferred columns and total records
     except Exception as e:
-        logger.error(f"Error fetching data for entity {entity_name}: {str(e)}")
+        logger.error(f"Error fetching data for entity {table_name if table_name else entity_name}: {str(e)}")
+        raise  # Re-raise the exception to stop further execution
 
-app = FastAPI()
+@app.get("/get-total-rows")
+async def get_total_rows(entity_name: str):
+    try:
+        # Fetch the total number of rows from the database
+        table_name = entity_name.lower().replace("-", "_")
+        db = SessionLocal()
+        total_records = db.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
+        db.close()
+        return {"total_records": total_records}
+    except Exception as e:
+        logger.error(f"Error fetching total rows for entity {entity_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching total rows for entity {entity_name}: {str(e)}")
 
-@app.post("/fetch-and-save-all-entities")
-async def fetch_and_save_all_entities(background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
+@app.post("/fetch-and-save-entity")
+async def fetch_and_save_entity(entity_name: str, background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
-
     access_token = authorization.split("Bearer ")[1]
-
     try:
-        entities_metadata = fetch_entities_metadata(access_token)
-        if not entities_metadata:
-            raise HTTPException(status_code=404, detail="No entities found")
-
-        create_tables_for_entities(entities_metadata)
-
-        for entity in entities_metadata:
-            background_tasks.add_task(fetch_and_save_entity_data, access_token, entity["name"])
-
-        # Return the list of entity names being processed
-        entity_names = [entity["name"] for entity in entities_metadata]
-        return {"success": True, "message": "Entities metadata fetched and tables created successfully", "entities": entity_names}
+        result = fetch_and_save_entity_data(access_token, entity_name)
+        return {"success": True, "message": f"Entity {entity_name} data fetching and saving initiated", "columns": result["columns"]}
     except Exception as e:
-        logger.error(f"Error fetching and saving all entities: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching and saving all entities: {str(e)}")
+        logger.error(f"Error fetching and saving entity {entity_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching and saving entity {entity_name}: {str(e)}")
+
+@app.get("/stream-progress")
+async def stream_progress(entity_name: str):
+    def generate_progress():
+        for i in range(101):
+            time.sleep(0.1)  # Simulate some processing time
+            yield f"data: {i}\n\n"
+    return StreamingResponse(generate_progress(), media_type="text/event-stream")
 
 
-
-
-
-
-
-
-
-
-
+@app.get("/get-entity-columns")
+async def get_entity_columns(entity_name: str):
+    try:
+        # Fetch the schema for the entity
+        metadata = MetaData()
+        table = Table(entity_name.lower(), metadata, autoload_with=engine)
+        columns = [col.name for col in table.columns]
+        return columns
+    except SQLAlchemyError as e:
+        logger.error(f"Error fetching columns for entity {entity_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching columns for entity {entity_name}: {str(e)}")
 # Helper function to generate a random string for anonymization
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))

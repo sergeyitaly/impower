@@ -38,18 +38,26 @@
                 <i class="fas fa-check"></i> Authenticate
             </button>
         </div>
+
+<!-- Entity Selection Dropdown -->
         <div id="fetchEntitiesControls" class="text-center mt-8" style="display: none;">
-            <button id="fetchEntitiesBtn" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition duration-200">
-                <i class="fas fa-download"></i> Fetch All Entities
+            <div class="mb-4">
+                <label for="entitySelect" class="block text-sm font-medium text-gray-700">Select Entity:</label>
+                <select id="entitySelect" class="mt-1 block w-48 mx-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">-- Select an Entity --</option>
+                </select>
+            </div>
+            <button id="fetchEntityBtn" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition duration-200">
+                <i class="fas fa-download"></i> Fetch Entity Data
             </button>
         </div>
+
         <!-- Migration Button -->
         <div id="migrationControls" class="text-center mt-8" style="display: none;">
             <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
                 <i class="fas fa-sync-alt"></i> Start Migration
             </button>
         </div>
-
 
         <!-- Progress Bars -->
         <div id="progressContainer" class="mt-8 max-w-2xl mx-auto" style="display: none;">
@@ -137,14 +145,15 @@
 
     <script>
         let accessToken = null;
-
         document.getElementById("toggleLogs").addEventListener("click", function() {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.style.display = logsContainer.style.display === "none" ? "block" : "none";
             this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
         });
-
-
+        function autoScrollLogs() {
+            const logsContainer = document.getElementById("logsContainer");
+            logsContainer.scrollTop = logsContainer.scrollHeight; // Scroll to the bottom
+        }
         document.getElementById("authenticateBtn").addEventListener("click", async () => {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
@@ -211,7 +220,7 @@
             try {
                 // Fetch and save users
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving users to staging...</p>`;
-                document.getElementById("fetchingMessage").textContent = "Fetching users...";
+                document.getElementById("fetchingMessage").textContent = "Fetching ...";
                 document.getElementById("fetchingProgress").style.width = "50%";
 
                 const fetchAndSaveData = await fetchAndSaveUsers(accessToken);
@@ -258,15 +267,13 @@
                     document.getElementById("migrationMessage").textContent = `Migrating user ${result.user_id}...`;
 
                     logsContainer.innerHTML += `<p><strong>User ID:</strong> ${result.user_id} <br> <strong>Staging Status:</strong> ${result.staging_status} <br><strong>CRM Status:</strong> ${result.crm_status} <br><strong>Action:</strong> ${result.action || "none"} <br>${result.error ? `<strong>Error:</strong> ${result.error}` : ""}</p>`;
-                    logsContainer.scrollTop = logsContainer.scrollHeight;
-
+                    autoScrollLogs();
                     // Introduce a small delay to allow the UI to update
                     await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
                 }
 
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Migration Summary:</p><p>Total Records: ${data.total_records}</p><p>Successfully Migrated: ${data.success_count}</p><p>Updated: ${data.update_count}</p><p>Inserted: ${data.insert_count}</p><p>Failed: ${data.error_count}</p>`;
-                logsContainer.scrollTop = logsContainer.scrollHeight;
-
+                autoScrollLogs();
                 // Populate the migration summary table dynamically
                 const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
                 summaryTable.innerHTML = `
@@ -313,94 +320,165 @@
                 hideLoadingSpinner();
             }
         });
-        // Function to fetch and save all entities
-        async function fetchAndSaveAllEntities(accessToken) {
+
+                    
+        // Fetch the list of entities from the backend
+        async function fetchEntitiesList() {
             try {
-                const response = await fetch("/fetch-and-save-all-entities", {
+                const response = await fetch("/facilioo-entities");
+                if (!response.ok) {
+                    throw new Error("Failed to fetch entities list");
+                }
+                const entities = await response.json();
+                return entities;
+            } catch (error) {
+                console.error("Error fetching entities list:", error);
+                return [];
+            }
+        }
+
+        // Populate the dropdown with entities
+        async function populateEntityDropdown() {
+            const entitySelect = document.getElementById("entitySelect");
+            const entities = await fetchEntitiesList();
+
+            // Clear existing options
+            entitySelect.innerHTML = '<option value="">-- Select an Entity --</option>';
+
+            // Add entities to the dropdown
+            entities.forEach(entity => {
+                const option = document.createElement("option");
+                option.value = entity;
+                option.textContent = entity.replace(/-/g, " "); // Replace hyphens with spaces for display
+                entitySelect.appendChild(option);
+            });
+        }
+
+        // Fetch data for the selected entity
+        async function fetchEntityData(entityName) {
+            try {
+                const response = await fetch(`/fetch-and-save-entity?entity_name=${entityName}`, {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json",
                         "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
                     },
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Failed to fetch and save entities');
+                    throw new Error("Failed to fetch entity data");
                 }
 
                 const data = await response.json();
                 return data;
             } catch (error) {
-                console.error("Error during fetch and save entities:", error);
-                throw new Error(error.message || 'Error fetching and saving entities');
+                console.error("Error fetching entity data:", error);
+                throw error;
             }
         }
+                
+        // Event listener for the "Fetch Entity Data" button
+        document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
+            const entitySelect = document.getElementById("entitySelect");
+            const selectedEntity = entitySelect.value;
 
-        document.getElementById("fetchEntitiesBtn").addEventListener("click", async () => {
-            const logsContainer = document.getElementById("logsContainer");
-            logsContainer.innerHTML = "";
-            logsContainer.style.display = "block";
-          
-            resetProgressBars();
+            if (!selectedEntity) {
+                alert("Please select an entity.");
+                return;
+            }
+
             showLoadingSpinner();
-          
+
             try {
-                // Fetch and save all entities
-                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving entities to staging...</p>`;
-                document.getElementById("fetchingMessage").textContent = "Fetching entities...";
+                const logsContainer = document.getElementById("logsContainer");
+                logsContainer.innerHTML = "";
+                logsContainer.style.display = "block";
+
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for entity: ${selectedEntity}...</p>`;
+                autoScrollLogs();
+                document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}...`;
                 document.getElementById("fetchingProgress").style.width = "0%";
-          
-                const response = await fetch("/fetch-and-save-all-entities", {
+
+                // Start listening for progress updates
+                const eventSource = new EventSource(`/stream-progress?entity_name=${selectedEntity}`);
+
+                eventSource.onmessage = function(event) {
+                    const progress = parseInt(event.data);
+                    document.getElementById("fetchingProgress").style.width = `${progress}%`;
+                    document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}... ${progress}%`;
+
+                    if (progress === 100) {
+                        eventSource.close();
+                        document.getElementById("fetchingStatusMessage").textContent = "Complete";
+                        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Data fetched and saved successfully for ${selectedEntity}.</p>`;
+                        autoScrollLogs();
+
+                        // Fetch the total number of rows after progress reaches 100%
+                        fetchTotalRows(selectedEntity);
+
+                        // Reset progress bar to 0 after 1 second
+                        setTimeout(() => {
+                            document.getElementById("fetchingProgress").style.width = "0%";
+                            document.getElementById("fetchingMessage").textContent = "Fetching: Not Started";
+                        }, 1000);
+                    }
+                };
+
+                const response = await fetch(`/fetch-and-save-entity?entity_name=${selectedEntity}`, {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${accessToken}`,
-                        "Content-Type": "application/json"
-                    }
+                        "Content-Type": "application/json",
+                    },
                 });
-          
+
+                if (!response.ok) {
+                    throw new Error("Failed to fetch entity data");
+                }
+
                 const data = await response.json();
-          
+
                 if (data.success) {
-                    const entities = data.entities;
-                    const totalEntities = entities.length;
-                    let processedEntities = 0;
-          
-                    // Process each entity
-                    for (const entity of entities) {
-                        // Log the entity name being fetched
-                        logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving ${entity.name}...</p>`;
-                        
-                        // Update the progress bar caption with the current entity's name
-                        document.getElementById("fetchingMessage").textContent = `Fetching ${entity.name}...`;
-                        
-                        // Simulate progress (you can replace this with actual progress updates)
-                        processedEntities++;
-                        const progress = (processedEntities / totalEntities) * 100;
-                        document.getElementById("fetchingProgress").style.width = `${progress}%`;
-          
-                        // Simulate a delay (you can remove this in production)
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    }
-          
-                    // Finalize the process
-                    document.getElementById("fetchingProgress").style.width = "100%";
-                    document.getElementById("fetchingStatusMessage").textContent = "Complete";
-                    logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Entities fetched and saved successfully.</p>`;
+                    // Populate the logs section with entity columns
+                    logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
+                    logsContainer.innerHTML += `<pre>${data.columns.join("\n")}</pre>`; // Display columns in the logs section
+                    autoScrollLogs();
                 } else {
-                    // If the API call fails
                     document.getElementById("fetchingStatusMessage").textContent = "Failed";
-                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch and save entities.</p>`;
+                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch and save data for ${selectedEntity}.</p>`;
+                    autoScrollLogs();
                 }
             } catch (error) {
                 console.error("Error:", error);
-                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching and saving entities.</p>`;
-                document.getElementById("fetchingMessage").textContent = "Fetching: Error";
+                document.getElementById("fetchingStatusMessage").textContent = "Error";
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching data for ${selectedEntity}.</p>`;
+                autoScrollLogs();
             } finally {
                 hideLoadingSpinner();
             }
         });
-                
+
+        // Function to fetch the total number of rows after progress reaches 100%
+        async function fetchTotalRows(entityName) {
+            try {
+                const response = await fetch(`/get-total-rows?entity_name=${entityName}`);
+                if (!response.ok) {
+                    throw new Error("Failed to fetch total rows");
+                }
+
+                const data = await response.json();
+                const logsContainer = document.getElementById("logsContainer");
+                logsContainer.innerHTML += `<p><i class="fas fa-database"></i> Total Rows Added: ${data.total_records}</p>`;
+                autoScrollLogs();
+            } catch (error) {
+                console.error("Error fetching total rows:", error);
+            }
+        }                // Populate the dropdown when the page loads
+                document.addEventListener("DOMContentLoaded", () => {
+                    populateEntityDropdown();
+                });
+
+
         async function fetchAndSaveUsers(accessToken) {
             try {
                 const response = await fetch("/fetch-and-save-users", {

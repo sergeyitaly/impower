@@ -8,95 +8,103 @@
 
 /* Body & Container */
 body {
-    background: #f4f4f9;
-    color: #333;
+    background: #f7f8fc;
+    color: #444;
     display: flex;
     justify-content: center;
     align-items: center;
     height: 100vh;
+    padding: 15px;
 }
 
+/* Container */
 .container {
     background: #fff;
-    padding: 30px;
+    padding: 18px;
     border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
     width: 100%;
-    max-width: 600px;
+    max-width: 700px;
     text-align: center;
+    transition: box-shadow 0.3s ease-in-out;
+}
+
+.container:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 /* Typography */
 h1 {
     font-size: 24px;
-    margin-bottom: 20px;
+    color: #333;
+    margin-bottom: 16px;
+    font-weight: 600;
 }
 
-/* Form */
+/* Form Styling */
 .form-group {
-    margin-bottom: 15px;
+    margin-bottom: 16px;
     text-align: left;
 }
 
 label {
     font-size: 14px;
-    color: #555;
+    color: #666;
+    margin-bottom: 5px;
     display: block;
 }
 
 input {
     width: 100%;
     padding: 10px;
-    font-size: 16px;
+    font-size: 15px;
     border: 1px solid #ddd;
-    border-radius: 5px;
-    outline: none;
+    border-radius: 6px;
     margin-bottom: 10px;
+    transition: border 0.3s ease;
 }
 
 input:focus {
-    border-color: #4a90e2;
+    border-color: #5c6bc0;
+    outline: none;
 }
 
-/* Buttons */
+/* Button Styling */
 .btn {
-    background: #4a90e2;
+    background: #5c6bc0;
     color: #fff;
-    padding: 12px;
-    font-size: 16px;
+    padding: 10px;
+    font-size: 14px;
     border: none;
-    border-radius: 5px;
+    border-radius: 6px;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     transition: 0.3s;
     width: 100%;
 }
 
 .btn:hover {
-    background: #357ab7;
+    background: #4f5b9c;
 }
 
 .btn i {
-    margin-right: 8px;
+    margin-right: 6px;
 }
 
 /* Progress Bar */
 .progress-container {
-    margin-top: 30px;
+    margin-top: 20px;
     display: none;
 }
 
 .progress-bar {
-    background: #f0f0f0;
-    border-radius: 5px;
-    height: 20px;
+    background: #f5f5f5;
+    border-radius: 6px;
+    height: 12px;
     overflow: hidden;
 }
 
 .progress {
-    background: #4a90e2;
+    background: #5c6bc0;
     height: 100%;
     width: 0;
     transition: width 0.5s;
@@ -106,23 +114,24 @@ input:focus {
 .status-cards {
     margin-top: 20px;
     display: flex;
-    gap: 20px;
+    gap: 15px;
     justify-content: space-between;
+    flex-wrap: wrap;
     display: none;
 }
 
 .card {
     background: #fff;
-    padding: 15px;
+    padding: 16px;
     border-radius: 10px;
-    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
     width: 48%;
     text-align: center;
 }
 
 .card i {
-    font-size: 30px;
-    color: #4a90e2;
+    font-size: 28px;
+    color: #5c6bc0;
     margin-bottom: 10px;
 }
 
@@ -134,30 +143,51 @@ input:focus {
 }
 
 #logsContainer {
-    margin-top: 10px;
-    padding: 10px;
-    background: #f9f9f9;
-    border-radius: 5px;
-    max-height: 200px;
-    overflow-y: auto;
+    margin-top: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 6px;
+    max-height: 220px;
+    overflow-y: auto; /* Enable vertical scrollbar */
     font-family: monospace;
     font-size: 14px;
+    scroll-behavior: smooth; /* Smooth scrolling */
 }
 
+/* Custom scrollbar styling */
+#logsContainer::-webkit-scrollbar {
+    width: 8px; /* Width of the scrollbar */
+}
+
+#logsContainer::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Color of the scrollbar track */
+    border-radius: 4px;
+}
+
+#logsContainer::-webkit-scrollbar-thumb {
+    background: #888; /* Color of the scrollbar thumb */
+    border-radius: 4px;
+}
+
+#logsContainer::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Color of the scrollbar thumb on hover */
+}
+
+/* Toggle Logs Button */
 #toggleLogs {
-    margin-top: 10px;
-    background: #f4f4f9;
+    margin-top: 12px;
+    background: #f7f7f7;
     border: 1px solid #ddd;
     padding: 10px;
     cursor: pointer;
     width: 100%;
-    border-radius: 5px;
+    border-radius: 6px;
     font-size: 14px;
     transition: 0.3s;
 }
 
 #toggleLogs:hover {
-    background: #e3e3e3;
+    background: #f1f1f1;
 }
 
 /* CRM Link */
@@ -169,119 +199,154 @@ input:focus {
 #crmLink {
     text-decoration: none;
     font-size: 16px;
-    color: #4a90e2;
-    font-weight: bold;
+    color: #5c6bc0;
+    font-weight: 600;
 }
 
 #crmLink:hover {
     text-decoration: underline;
 }
-/* Migration Summary Container */
+
+/* Migration Summary */
 .migration-summary {
     margin-top: 20px;
     overflow-x: auto;
     width: 100%;
-    max-width: 100%; /* Ensure it doesn't exceed the container's width */
-    box-sizing: border-box; /* Ensure padding and borders don't affect the layout */
 }
 
 /* Table Styling */
 #migrationSummaryTable {
-    width: 100%; /* Set to 100% width to fit the container */
-    table-layout: fixed; /* Ensure that table layout is fixed and columns adjust accordingly */
-    border-collapse: collapse;
-    margin-top: 10px;
+    width: 100%;
+    table-layout: fixed;
 }
 
-#migrationSummaryTable th, 
+#migrationSummaryTable th,
 #migrationSummaryTable td {
-    border: 1px solid #ddd;
-    padding: 8px;
+    padding: 12px;
     text-align: left;
-    white-space: nowrap;
-    overflow: hidden; /* Avoid text overflow in cells */
-    text-overflow: ellipsis; /* Add ellipsis for long text */
+    font-size: 14px;
 }
 
-#migrationSummaryTable thead th {
-    background: #f4f4f4;
-    position: sticky;
-    top: 0;
-    z-index: 1;
+.migration-summary th {
+    background-color: #f7f7f7;
+    color: #5c6bc0;
 }
 
-/* Scrollbar */
-.migration-summary::-webkit-scrollbar {
-    height: 8px;
-}
-
-.migration-summary::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-.migration-summary::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-.migration-summary::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* Excel Download */
-.excel-download {
-    display: none;
-    align-items: center;
-    font-size: 16px;
-    font-weight: 500;
-    color: #217346;
-    background: #e6f5ec;
-    padding: 10px 15px;
-    border-radius: 8px;
-    transition: 0.3s;
-    border: 1px solid #217346;
-    width: fit-content;
-}
-
-.excel-download i {
-    color: #217346;
-    font-size: 18px;
-    margin-right: 8px;
-}
-
-.excel-download a {
-    text-decoration: none;
-    color: inherit;
-    font-weight: bold;
-}
-
-.excel-download:hover {
-    background: #217346;
-    color: #fff;
-}
-
-.excel-download:hover i,
-.excel-download a:hover {
-    color: #fff;
-}
-
-/* Responsive */
+/* Mobile Responsive */
 @media (max-width: 768px) {
     .container {
-        padding: 20px;
-        width: 90%;
+        padding: 16px;
     }
 
     .status-cards {
         flex-direction: column;
+        gap: 12px;
     }
 
     .card {
         width: 100%;
     }
 
-    #crmLink {
-        font-size: 14px;
+    .migration-summary {
+        margin-top: 16px;
     }
 }
 
+/* Small Device Responsiveness */
+@media (max-width: 480px) {
+    h1 {
+        font-size: 20px;
+    }
+
+    .form-group input {
+        padding: 8px;
+        font-size: 14px;
+    }
+
+    .btn {
+        font-size: 12px;
+        padding: 10px;
+    }
+
+    .progress-bar {
+        height: 10px;
+    }
+
+    .card i {
+        font-size: 24px;
+    }
+
+    .migration-summary th,
+    .migration-summary td {
+        padding: 10px;
+    }
+}
+
+/* Large Screens */
+@media (min-width: 1024px) {
+    .container {
+        max-width: 840px;
+    }
+}
+
+/* Style for the Entity Selection Dropdown */
+#fetchEntitiesControls {
+    display: block;
+    background-color: #f9fafb;
+    padding: 12px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+#fetchEntitiesControls label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+#fetchEntitiesControls select {
+    width: 70%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background-color: #fff;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+    margin: 0 auto;
+    display: block;
+}
+
+#fetchEntitiesControls select:focus {
+    border-color: #6366f1;
+    outline: none;
+}
+
+#fetchEntitiesControls button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 16px;
+    background-color: #6b21a8;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+#fetchEntitiesControls button:hover {
+    background-color: #7c3aed;
+    transform: translateY(-2px);
+}
+
+#fetchEntitiesControls button:active {
+    transform: translateY(0);
+}
+
+#fetchEntitiesControls button i {
+    margin-right: 6px;
+}
