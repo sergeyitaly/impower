@@ -255,6 +255,39 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
         logger.error(f"Error fetching data for entity {table_name if table_name else entity_name}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
 
+
+@app.post("/fetch-entity-fields")
+async def fetch_entity_fields(entity_name: str, authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    access_token = authorization.split("Bearer ")[1]
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+
+    try:
+        response = requests.get(f"{API_URL}/api/{entity_name}", headers=headers, params={"PageSize": 1, "PageNumber": 1})
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch entity data: {response.text}")
+
+        entity_data = response.json().get("items", [])
+        if not entity_data:
+            return {"success": False, "message": f"No data found for entity {entity_name}", "columns": []}
+
+        # Extract field names from the first record
+        sample_record = entity_data[0] if entity_data else {}
+        columns = list(sample_record.keys())
+
+        return {"success": True, "columns": columns}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching entity fields: {str(e)}")
+
+
 @app.get("/get-total-rows")
 async def get_total_rows(entity_name: str):
     try:
@@ -300,6 +333,7 @@ async def get_entity_columns(entity_name: str):
     except SQLAlchemyError as e:
         logger.error(f"Error fetching columns for entity {entity_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching columns for entity {entity_name}: {str(e)}")
+    
 # Helper function to generate a random string for anonymization
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
@@ -561,7 +595,16 @@ async def get_crm_contacts_url():
         return JSONResponse(content={"error": "CRM contacts URL not configured"}, status_code=500)
     return {"crmContactsUrl": crm_contacts_url}
 
-
+def correct_entity_name(entity_name: str) -> str:
+    # Handling special pluralization cases
+    if entity_name.endswith('y'):
+        return entity_name[:-1] + 'ies'  # For words ending in 'y', change to 'ies'
+    elif entity_name.endswith('s'):
+        return entity_name  # Already plural, no change
+    else:
+        return entity_name + 's'  # General case: add 's'
+    
+    
 # Function to get CRM access token
 def get_crm_access_token():
     # Authenticate with Azure AD to get access token for CRM API
@@ -605,6 +648,88 @@ def get_crm_access_token():
         )
         print(f"Error during token retrieval: {str(e)}")
         return None
+
+def get_crm_entities(access_token: str):
+    try:
+        # Define the CRM API endpoint to fetch entities
+        query_url = f"{CRM_URL}/EntityDefinitions"  # Adjust the endpoint as per your CRM API
+        response = requests.get(query_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        })
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to fetch CRM entities: {response.text}")
+
+        # Parse the response to extract entity names
+        entities_data = response.json().get("value", [])
+        entities = [entity["LogicalName"] for entity in entities_data]  # Adjust based on the CRM API response structure
+
+        return entities
+    except Exception as e:
+        logger.error(f"Error fetching CRM entities: {str(e)}")
+        raise
+
+@app.get("/crm-entities")
+async def fetch_crm_entities(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    access_token = authorization.split("Bearer ")[1]
+    try:
+        # Get CRM access token
+        crm_access_token = get_crm_access_token()
+        if not crm_access_token:
+            raise HTTPException(status_code=500, detail="Failed to get CRM access token")
+
+        # Fetch CRM entities
+        entities = get_crm_entities(crm_access_token)
+        return {"entities": entities}
+    except Exception as e:
+        logger.error(f"Error fetching CRM entities: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching CRM entities: {str(e)}")
+    
+
+def get_crm_entity_fields(entity_name: str, access_token: str):
+    try:
+        # Define the CRM API endpoint to fetch entity metadata
+        query_url = f"{CRM_URL}/EntityDefinitions(LogicalName='{entity_name}')/Attributes"
+        response = requests.get(query_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        })
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to fetch entity fields: {response.text}")
+
+        # Parse the response to extract field names
+        attributes_data = response.json().get("value", [])
+        columns = [attribute["LogicalName"] for attribute in attributes_data]  # Adjust based on API response
+
+        return columns
+    except Exception as e:
+        logger.error(f"Error fetching CRM entity fields: {str(e)}")
+        raise
+
+
+@app.get("/crm-entity-fields")
+async def fetch_crm_entity_fields(entity_name: str, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    access_token = authorization.split("Bearer ")[1]
+    try:
+        # Get CRM access token
+        crm_access_token = get_crm_access_token()
+        if not crm_access_token:
+            raise HTTPException(status_code=500, detail="Failed to get CRM access token")
+
+        # Fetch entity columns
+        columns = get_crm_entity_fields(entity_name, crm_access_token)
+        return {"success": True, "columns": columns}
+    except Exception as e:
+        logger.error(f"Error fetching CRM entity fields: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching CRM entity fields: {str(e)}")
 
 
 @app.post("/authenticate")

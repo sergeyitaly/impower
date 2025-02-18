@@ -42,20 +42,39 @@
 <!-- Entity Selection Dropdown -->
         <div id="fetchEntitiesControls" class="text-center mt-8" style="display: none;">
             <div class="mb-4">
-                <label for="entitySelect" class="block text-sm font-medium text-gray-700">Select Entity:</label>
+                <label for="entitySelect" class="block text-sm font-medium text-gray-700">Select a Facilioo Entity:</label>
                 <select id="entitySelect" class="mt-1 block w-48 mx-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                    <option value="">-- Select an Entity --</option>
+                    <option value="">-- Select a Facilioo Entity --</option>
                 </select>
             </div>
             <button id="fetchEntityBtn" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition duration-200">
-                <i class="fas fa-download"></i> Fetch Entity Data
+                <i class="fas fa-download"></i> Fetch Facilioo Entity Data
+            </button>
+        </div>
+<!-- Entity Selection Dropdown -->
+        <div id="fetchEntitiesControlsCRM" class="text-center mt-8" style="display: none;">
+            <div class="mb-4">
+                <label for="entitySelectCRM" class="block text-sm font-medium text-gray-700">Select a CRM Entity:</label>
+                <select id="entitySelectCRM" class="mt-1 block w-48 mx-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">-- Select a CRM Entity --</option>
+                </select>
+            </div>
+            <button id="fetchEntityBtnCRM" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition duration-200">
+                <i class="fas fa-download"></i> Fetch CRM Entity Fields
+            </button>
+        </div>
+
+<!-- Match Entities Button -->
+        <div class="text-center mt-4">
+            <button id="matchEntitiesBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
+                <i class="fas fa-exchange-alt"></i> Match Entities
             </button>
         </div>
 
         <!-- Migration Button -->
         <div id="migrationControls" class="text-center mt-8" style="display: none;">
             <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
-                <i class="fas fa-sync-alt"></i> Start Migration
+                <i class="fas fa-sync-alt"></i> Start Accounts Migration
             </button>
         </div>
 
@@ -154,6 +173,8 @@
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.scrollTop = logsContainer.scrollHeight; // Scroll to the bottom
         }
+
+
         document.getElementById("authenticateBtn").addEventListener("click", async () => {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
@@ -180,13 +201,20 @@
                 }
 
                 const data = await response.json();
-                accessToken = data.access_token;
+                accessToken = data.access_token; // Store token globally
+
+                // Hide auth form and show controls
                 document.getElementById("authForm").style.display = "none";
                 document.getElementById("migrationControls").style.display = "block";
-                document.getElementById("fetchEntitiesControls").style.display = "block"; // Show Fetch Entities button
+                document.getElementById("fetchEntitiesControls").style.display = "block";
+                document.getElementById("fetchEntitiesControlsCRM").style.display = "block";
                 document.getElementById("progressContainer").style.display = "block";
                 document.getElementById("logsSection").style.display = "block";
                 document.getElementById("statusCards").style.display = "grid";
+
+                // Call function to fetch CRM entities
+                await fetchAndPopulateCrmEntities();
+
             } catch (error) {
                 console.error("Error during authentication:", error);
                 alert(`Authentication failed: ${error.message}`);
@@ -194,6 +222,7 @@
                 hideLoadingSpinner();
             }
         });
+
         document.addEventListener("DOMContentLoaded", () => {
             const emailInput = document.getElementById("email");
             const passwordInput = document.getElementById("password");
@@ -207,8 +236,177 @@
         
             emailInput.addEventListener("input", checkInputsAndSubmit);
             passwordInput.addEventListener("input", checkInputsAndSubmit);
+                });
+        
+                
+            // Function to fetch CRM entities and populate the dropdown
+        async function fetchAndPopulateCrmEntities() {
+            try {
+                const response = await fetch("/crm-entities", {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`, // Ensure token is set
+                        "Content-Type": "application/json",
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to fetch CRM entities");
+                }
+
+                const data = await response.json();
+                if (!data.entities || !Array.isArray(data.entities)) {
+                    throw new Error("Invalid API response format");
+                }
+
+                // Populate dropdown
+                const entitySelect = document.getElementById("entitySelect");
+                entitySelectCRM.innerHTML = '<option value="">-- Select a CRM Entity --</option>';
+
+                data.entities.forEach(entity => {
+                    const option = document.createElement("option");
+                    option.value = entity;
+                    option.textContent = entity.replace(/-/g, " "); // Replace hyphens with spaces
+                    entitySelectCRM.appendChild(option);
+                });
+
+                console.log("CRM entities loaded successfully.");
+
+            } catch (error) {
+                console.error("Error fetching CRM entities:", error);
+                alert("Failed to fetch CRM entities. Please try again.");
+            }
+        }
+
+
+
+        document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
+            const faciliooEntitySelect = document.getElementById("entitySelect");
+            const crmEntitySelect = document.getElementById("entitySelectCRM");
+        
+            const selectedFaciliooEntity = faciliooEntitySelect.value;
+            const selectedCrmEntity = crmEntitySelect.value;
+        
+            if (!selectedFaciliooEntity || !selectedCrmEntity) {
+                alert("Please select both Facilioo and CRM entities.");
+                return;
+            }
+        
+            const logsContainer = document.getElementById("logsContainer");
+            logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
+            autoScrollLogs();
+            logsContainer.style.display = "block";
+        
+            try {
+                // Fetch fields for both Facilioo and CRM entities
+                const [faciliooResponse, crmResponse] = await Promise.all([
+                    fetch(`/fetch-entity-fields?entity_name=${selectedFaciliooEntity}`, {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${accessToken}`,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ entity_name: selectedFaciliooEntity })
+                    }),
+                    fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
+                        method: "GET",
+                        headers: {
+                            "Authorization": `Bearer ${accessToken}`,
+                            "Content-Type": "application/json",
+                        },
+                    }),
+                ]);
+        
+                if (!faciliooResponse.ok || !crmResponse.ok) {
+                    throw new Error("Failed to fetch entity fields.");
+                }
+        
+                const faciliooData = await faciliooResponse.json();
+                const crmData = await crmResponse.json();
+        
+                if (faciliooData.success && crmData.success) {
+                    // Normalize field names to lowercase for case-insensitive comparison
+                    const faciliooFields = new Set(faciliooData.columns.map(field => field.toLowerCase()));
+                    const crmFields = new Set(crmData.columns.map(field => field.toLowerCase()));
+        
+                    // Separate matched fields and unique fields
+                    const matchedFields = [];
+                    const uniqueFaciliooFields = [];
+                    const uniqueCrmFields = [];
+        
+                    // Check for matched fields (case-insensitive)
+                    faciliooData.columns.forEach(field => {
+                        const lowerField = field.toLowerCase();
+                        if (crmFields.has(lowerField)) {
+                            matchedFields.push(field); // Field is present in both (original case)
+                        } else {
+                            uniqueFaciliooFields.push(field); // Field is unique to Facilioo
+                        }
+                    });
+        
+                    // Check for CRM-only fields (case-insensitive)
+                    crmData.columns.forEach(field => {
+                        const lowerField = field.toLowerCase();
+                        if (!faciliooFields.has(lowerField)) {
+                            uniqueCrmFields.push(field); // Field is unique to CRM
+                        }
+                    });
+        
+                    // Start table creation
+                    let tableHtml = `<table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.2;">
+                                        <tr>
+                                            <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
+                                            <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
+                                            <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
+                                        </tr>`;
+        
+                    // Fill table rows with Facilioo, CRM, and matched fields
+                    const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
+                    for (let i = 0; i < maxLength; i++) {
+                        tableHtml += "<tr>";
+        
+                        // Facilioo column (Unique fields or empty if matched)
+                        const faciliooField = uniqueFaciliooFields[i] || matchedFields[i];
+                        tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${faciliooField ? `<span style="color: magenta;">✘ ${faciliooField}</span>` : ''}</td>`;
+        
+                        // CRM column (Unique fields or empty if matched)
+                        const crmField = uniqueCrmFields[i] || matchedFields[i];
+                        tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${crmField ? `<span style="color: blue;">✘ ${crmField}</span>` : ''}</td>`;
+        
+                        // Matched fields column
+                        const matchedField = matchedFields[i];
+                        tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${matchedField ? `<span style="color: green; font-weight: bold;">✔ ${matchedField}</span>` : ''}</td>`;
+        
+                        tableHtml += "</tr>";
+                    }
+        
+                    tableHtml += "</table>";
+        
+                    logsContainer.innerHTML += tableHtml;
+                    autoScrollLogs();
+                } else {
+                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch entity fields.</p>`;
+                    autoScrollLogs();
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while matching entities.</p>`;
+                autoScrollLogs();
+            }
         });
         
+        
+
+
+
+
+
+        // Call the function to fetch and populate CRM entities when the page loads
+        document.addEventListener("DOMContentLoaded", () => {
+            if (accessToken) {
+                fetchAndPopulateCrmEntities();
+            }
+        });
         document.getElementById("migrateBtn").addEventListener("click", async () => {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.innerHTML = "";
@@ -343,7 +541,7 @@
             const entities = await fetchEntitiesList();
 
             // Clear existing options
-            entitySelect.innerHTML = '<option value="">-- Select an Entity --</option>';
+            entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
 
             // Add entities to the dropdown
             entities.forEach(entity => {
@@ -376,7 +574,52 @@
                 throw error;
             }
         }
-                
+
+        document.getElementById("fetchEntityBtnCRM").addEventListener("click", async () => {
+            const entitySelect = document.getElementById("entitySelectCRM");
+            const selectedEntity = entitySelect.value;
+        
+            if (!selectedEntity) {
+                alert("Please select a CRM entity.");
+                return;
+            }
+        
+            const logsContainer = document.getElementById("logsContainer");
+            logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Fetching column names for CRM entity: ${selectedEntity}...</p>`;
+            autoScrollLogs();
+            logsContainer.style.display = "block";
+        
+            try {
+                const response = await fetch(`/crm-entity-fields?entity_name=${selectedEntity}`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+        
+                if (!response.ok) {
+                    throw new Error("Failed to fetch CRM entity fields");
+                }
+        
+                const data = await response.json();
+        
+                if (data.success) {
+                    logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
+                    logsContainer.innerHTML += `<pre>${data.columns.join("\n")}</pre>`; // Display columns in the logs section
+                    autoScrollLogs();
+                } else {
+                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;
+                    autoScrollLogs();
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching columns for ${selectedEntity}.</p>`;
+                autoScrollLogs();
+            }
+        });
+        
+
         // Event listener for the "Fetch Entity Data" button
         document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
             const entitySelect = document.getElementById("entitySelect");

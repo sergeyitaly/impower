@@ -289,26 +289,28 @@ input:focus {
     }
 }
 
-/* Style for the Entity Selection Dropdown */
-#fetchEntitiesControls {
+#fetchEntitiesControls,
+#fetchEntitiesControlsCRM {
     display: block;
     background-color: #f9fafb;
     padding: 12px;
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    max-width: 480px;
+    max-width: 500px;
     margin: 0 auto;
 }
 
-#fetchEntitiesControls label {
+#fetchEntitiesControls label,
+#fetchEntitiesControlsCRM label {
     font-size: 1rem;
     font-weight: 600;
     color: #4b5563;
 }
 
-#fetchEntitiesControls select {
-    width: 70%;
-    padding: 8px 12px;
+#fetchEntitiesControls select,
+#fetchEntitiesControlsCRM select {
+    width: 100%;
+    padding: 10px;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     background-color: #fff;
@@ -318,35 +320,30 @@ input:focus {
     display: block;
 }
 
-#fetchEntitiesControls select:focus {
+#fetchEntitiesControls select:focus,
+#fetchEntitiesControlsCRM select:focus {
     border-color: #6366f1;
     outline: none;
 }
 
-#fetchEntitiesControls button {
+#fetchEntitiesControls button,
+#fetchEntitiesControlsCRM button {
+    width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px 16px;
-    background-color: #6b21a8;
-    color: white;
+    padding: 10px;
     font-size: 1rem;
-    font-weight: 600;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.3s ease, transform 0.3s ease;
+}
+.matched {
+    color: green;
+    font-weight: bold;
 }
 
-#fetchEntitiesControls button:hover {
-    background-color: #7c3aed;
-    transform: translateY(-2px);
+.facilioo-only {
+    color: magenta;
 }
 
-#fetchEntitiesControls button:active {
-    transform: translateY(0);
-}
-
-#fetchEntitiesControls button i {
-    margin-right: 6px;
+.crm-only {
+    color: blue;
 }
