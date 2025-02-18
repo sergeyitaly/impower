@@ -65,7 +65,7 @@
         </div>
 
 <!-- Match Entities Button -->
-        <div class="text-center mt-4">
+        <div class="text-center mt-4" id="matchControls" class="text-center mt-8"  style="display: none;">
             <button id="matchEntitiesBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
                 <i class="fas fa-exchange-alt"></i> Match Entities
             </button>
@@ -206,6 +206,7 @@
                 // Hide auth form and show controls
                 document.getElementById("authForm").style.display = "none";
                 document.getElementById("migrationControls").style.display = "block";
+                document.getElementById("matchControls").style.display = "block";
                 document.getElementById("fetchEntitiesControls").style.display = "block";
                 document.getElementById("fetchEntitiesControlsCRM").style.display = "block";
                 document.getElementById("progressContainer").style.display = "block";
