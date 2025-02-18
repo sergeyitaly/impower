@@ -38,6 +38,7 @@
                 <i class="fas fa-check"></i> Authenticate
             </button>
         </div>
+
 <!-- Entity Selection and Fetch Buttons -->
 <div id="entityControls" class="flex justify-center gap-8 mt-8" style="display: none;">
     <!-- Facilioo Entity Section -->
@@ -226,22 +227,21 @@
                 hideLoadingSpinner();
             }
         });
-
         document.addEventListener("DOMContentLoaded", () => {
             const emailInput = document.getElementById("email");
             const passwordInput = document.getElementById("password");
             const authenticateBtn = document.getElementById("authenticateBtn");
-        
+
             function checkInputsAndSubmit() {
-                if (emailInput.value && passwordInput.value) {
+                if (document.hasFocus() && emailInput.value.trim() && passwordInput.value.trim()) {
                     authenticateBtn.click();
                 }
             }
-        
+
             emailInput.addEventListener("input", checkInputsAndSubmit);
             passwordInput.addEventListener("input", checkInputsAndSubmit);
-                });
-        
+        });
+
                 
             // Function to fetch CRM entities and populate the dropdown
         async function fetchAndPopulateCrmEntities() {
