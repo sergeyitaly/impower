@@ -12,9 +12,10 @@ body {
     color: #444;
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start; /* Align to top to prevent vertical overflow */
     min-height: 100vh;
     padding: 15px;
+    overflow-x: hidden; /* Prevent horizontal overflow */
 }
 
 .container {
@@ -26,6 +27,7 @@ body {
     max-width: 700px;
     text-align: center;
     transition: box-shadow 0.3s ease-in-out;
+    overflow: hidden; /* Prevent container overflow */
 }
 
 .container:hover {
@@ -322,6 +324,20 @@ input:focus {
         font-size: 0.85rem;
         padding: 6px;
     }
+
+    /* Prevent table overflow */
+    .migration-summary {
+        overflow-x: auto;
+    }
+
+    #migrationSummaryTable {
+        min-width: 600px; /* Ensure table is not squished */
+    }
+
+    /* Prevent logs container overflow */
+    #logsContainer {
+        max-height: 180px; /* Reduce height for smaller screens */
+    }
 }
 
 /* Large Screens */
@@ -343,26 +359,4 @@ input:focus {
 
 .crm-only {
     color: blue;
-}
-
-@media (max-width: 640px) {
-    #entityControls {
-        flex-direction: column; /* Stack items vertically */
-        gap: 12px;
-    }
-
-    #entityControls > div {
-        width: 100%; /* Take full width on small screens */
-        max-width: none;
-    }
-}
-
-@media (max-width: 640px) {
-    .migration-summary {
-        overflow-x: auto; /* Enable scrolling */
-    }
-
-    #migrationSummaryTable {
-        min-width: 600px; /* Ensure table is not squished */
-    }
 }

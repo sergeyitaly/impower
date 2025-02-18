@@ -227,23 +227,7 @@
                 hideLoadingSpinner();
             }
         });
-        document.addEventListener("DOMContentLoaded", () => {
-            const emailInput = document.getElementById("email");
-            const passwordInput = document.getElementById("password");
-            const authenticateBtn = document.getElementById("authenticateBtn");
-
-            function checkInputsAndSubmit() {
-                if (document.hasFocus() && emailInput.value.trim() && passwordInput.value.trim()) {
-                    authenticateBtn.click();
-                }
-            }
-
-            emailInput.addEventListener("input", checkInputsAndSubmit);
-            passwordInput.addEventListener("input", checkInputsAndSubmit);
-        });
-
-                
-            // Function to fetch CRM entities and populate the dropdown
+                            // Function to fetch CRM entities and populate the dropdown
         async function fetchAndPopulateCrmEntities() {
             try {
                 const response = await fetch("/crm-entities", {
