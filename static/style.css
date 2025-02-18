@@ -13,14 +13,13 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
     padding: 15px;
 }
 
-/* Container */
 .container {
     background: #fff;
-    padding: 18px;
+    padding: 16px;
     border-radius: 10px;
     box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
     width: 100%;
@@ -125,7 +124,7 @@ input:focus {
     padding: 16px;
     border-radius: 10px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    width: 48%;
+    width: 100%; /* Full width on mobile */
     text-align: center;
 }
 
@@ -148,29 +147,29 @@ input:focus {
     background: #f9fafb;
     border-radius: 6px;
     max-height: 220px;
-    overflow-y: auto; /* Enable vertical scrollbar */
+    overflow-y: auto;
     font-family: monospace;
     font-size: 14px;
-    scroll-behavior: smooth; /* Smooth scrolling */
+    scroll-behavior: smooth;
 }
 
 /* Custom scrollbar styling */
 #logsContainer::-webkit-scrollbar {
-    width: 8px; /* Width of the scrollbar */
+    width: 8px;
 }
 
 #logsContainer::-webkit-scrollbar-track {
-    background: #f1f1f1; /* Color of the scrollbar track */
+    background: #f1f1f1;
     border-radius: 4px;
 }
 
 #logsContainer::-webkit-scrollbar-thumb {
-    background: #888; /* Color of the scrollbar thumb */
+    background: #888;
     border-radius: 4px;
 }
 
 #logsContainer::-webkit-scrollbar-thumb:hover {
-    background: #555; /* Color of the scrollbar thumb on hover */
+    background: #555;
 }
 
 /* Toggle Logs Button */
@@ -232,28 +231,54 @@ input:focus {
     color: #5c6bc0;
 }
 
-/* Mobile Responsive */
-@media (max-width: 768px) {
-    .container {
-        padding: 16px;
-    }
-
-    .status-cards {
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .card {
-        width: 100%;
-    }
-
-    .migration-summary {
-        margin-top: 16px;
-    }
+/* Entity Controls Container */
+#entityControls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 16px;
+    max-width: 100%;
+    padding: 0 10px;
 }
 
-/* Small Device Responsiveness */
-@media (max-width: 480px) {
+/* Individual Entity Sections */
+#entityControls > div {
+    background-color: #fff;
+    padding: 16px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 280px;
+    text-align: center;
+}
+
+/* Dropdown Styling */
+#entityControls select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+/* Button Styling */
+#entityControls button {
+    width: 100%;
+    padding: 8px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+    .container {
+        padding: 12px;
+    }
+
     h1 {
         font-size: 20px;
     }
@@ -265,7 +290,7 @@ input:focus {
 
     .btn {
         font-size: 12px;
-        padding: 10px;
+        padding: 8px;
     }
 
     .progress-bar {
@@ -280,117 +305,7 @@ input:focus {
     .migration-summary td {
         padding: 10px;
     }
-}
 
-/* Large Screens */
-@media (min-width: 1024px) {
-    .container {
-        max-width: 840px;
-    }
-}
-
-#fetchEntitiesControls,
-#fetchEntitiesControlsCRM {
-    display: block;
-    background-color: #f9fafb;
-    padding: 12px;
-    border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    max-width: 500px;
-    margin: 0 auto;
-}
-
-#fetchEntitiesControls label,
-#fetchEntitiesControlsCRM label {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #4b5563;
-}
-
-#fetchEntitiesControls select,
-#fetchEntitiesControlsCRM select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    background-color: #fff;
-    font-size: 1rem;
-    transition: border-color 0.3s ease;
-    margin: 0 auto;
-    display: block;
-}
-
-#fetchEntitiesControls select:focus,
-#fetchEntitiesControlsCRM select:focus {
-    border-color: #6366f1;
-    outline: none;
-}
-
-#fetchEntitiesControls button,
-#fetchEntitiesControlsCRM button {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px;
-    font-size: 1rem;
-}
-.matched {
-    color: green;
-    font-weight: bold;
-}
-
-.facilioo-only {
-    color: magenta;
-}
-
-.crm-only {
-    color: blue;
-}
-/* Entity Controls Container */
-#entityControls {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 16px; /* Reduced gap for better fit */
-    margin-top: 16px;
-    max-width: 100%; /* Prevents overflow */
-    padding: 0 10px; /* Adds slight padding to prevent content from touching screen edges */
-}
-
-/* Individual Entity Sections */
-#entityControls > div {
-    background-color: #fff;
-    padding: 16px;
-    border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    width: 100%; /* Makes it responsive */
-    max-width: 280px; /* Prevents excessive width on larger screens */
-    text-align: center;
-}
-
-/* Dropdown Styling */
-#entityControls select {
-    width: 100%; /* Ensures dropdown adapts to container */
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-
-/* Button Styling */
-#entityControls button {
-    width: 100%; /* Makes button full-width */
-    padding: 8px;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 640px) {
     #entityControls {
         flex-direction: column;
         gap: 12px;
@@ -402,9 +317,30 @@ input:focus {
         padding: 12px;
     }
 
-    #entityControls select, 
+    #entityControls select,
     #entityControls button {
         font-size: 0.85rem;
         padding: 6px;
     }
+}
+
+/* Large Screens */
+@media (min-width: 1024px) {
+    .container {
+        max-width: 840px;
+    }
+}
+
+/* Matched Fields Styling */
+.matched {
+    color: green;
+    font-weight: bold;
+}
+
+.facilioo-only {
+    color: magenta;
+}
+
+.crm-only {
+    color: blue;
 }
