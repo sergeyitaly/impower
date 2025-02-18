@@ -347,61 +347,64 @@ input:focus {
 .crm-only {
     color: blue;
 }
-
-
 /* Entity Controls Container */
 #entityControls {
     display: flex;
+    flex-wrap: wrap;
     justify-content: center;
-    gap: 32px; /* Space between the two columns */
-    margin-top: 32px;
+    gap: 16px; /* Reduced gap for better fit */
+    margin-top: 16px;
+    max-width: 100%; /* Prevents overflow */
+    padding: 0 10px; /* Adds slight padding to prevent content from touching screen edges */
 }
 
-/* Individual Entity Section Styling */
+/* Individual Entity Sections */
 #entityControls > div {
-    background-color: #ffffff;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    width: 300px; /* Fixed width for consistency */
+    background-color: #fff;
+    padding: 16px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    width: 100%; /* Makes it responsive */
+    max-width: 280px; /* Prevents excessive width on larger screens */
     text-align: center;
 }
 
 /* Dropdown Styling */
 #entityControls select {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-    background-color: #fff;
-    font-size: 1rem;
-    transition: border-color 0.3s ease;
-}
-
-#entityControls select:focus {
-    border-color: #6366f1;
-    outline: none;
+    width: 100%; /* Ensures dropdown adapts to container */
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.9rem;
 }
 
 /* Button Styling */
 #entityControls button {
-    width: 100%;
-    padding: 10px;
-    font-size: 1rem;
+    width: 100%; /* Makes button full-width */
+    padding: 8px;
+    font-size: 0.9rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px; /* Space between icon and text */
+    gap: 6px;
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
     #entityControls {
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
+        padding: 0 5px;
     }
 
     #entityControls > div {
-        width: 100%;
+        max-width: 100%;
+        padding: 12px;
+    }
+
+    #entityControls select, 
+    #entityControls button {
+        font-size: 0.85rem;
+        padding: 6px;
     }
 }
