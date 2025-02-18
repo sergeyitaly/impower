@@ -39,34 +39,30 @@
             </button>
         </div>
 
-<!-- Entity Selection and Fetch Buttons -->
-<div id="entityControls" class="flex justify-center gap-8 mt-8" style="display: none;">
-    <!-- Facilioo Entity Section -->
-    <div class="bg-white p-6 rounded-lg shadow-md text-center">
-        <div class="mb-4">
-            <label for="entitySelect" class="block text-sm font-medium text-gray-700">Select a Facilioo Entity:</label>
-            <select id="entitySelect" class="mt-1 block w-48 mx-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                <option value="">-- Select a Facilioo Entity --</option>
-            </select>
-        </div>
-        <button id="fetchEntityBtn" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition duration-200">
-            <i class="fas fa-download"></i> Fetch Facilioo Entity Data
-        </button>
-    </div>
+        <!-- Entity Selection and Fetch Buttons -->
+        <div id="entityControls" class="flex justify-center gap-2 mt-4" style="display: none;">
+            <!-- Facilioo Entity Section -->
+            <div class="bg-white p-4 rounded border text-center">
+                <label for="entitySelect" class="block text-xs font-medium text-gray-600 mb-1">Facilioo Entity</label>
+                <select id="entitySelect" class="block w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm">
+                    <option value="">-- Select --</option>
+                </select>
+                <button id="fetchEntityBtn" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
+                    <i class="fas fa-download"></i> Fetch
+                </button>
+            </div>
 
-    <!-- CRM Entity Section -->
-    <div class="bg-white p-6 rounded-lg shadow-md text-center">
-        <div class="mb-4">
-            <label for="entitySelectCRM" class="block text-sm font-medium text-gray-700">Select a CRM Entity:</label>
-            <select id="entitySelectCRM" class="mt-1 block w-48 mx-auto px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                <option value="">-- Select a CRM Entity --</option>
-            </select>
+            <!-- CRM Entity Section -->
+            <div class="bg-white p-4 rounded border text-center">
+                <label for="entitySelectCRM" class="block text-xs font-medium text-gray-600 mb-1">CRM Entity</label>
+                <select id="entitySelectCRM" class="block w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm">
+                    <option value="">-- Select --</option>
+                </select>
+                <button id="fetchEntityBtnCRM" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
+                    <i class="fas fa-download"></i> Fetch
+                </button>
+            </div>
         </div>
-        <button id="fetchEntityBtnCRM" class="bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition duration-200">
-            <i class="fas fa-download"></i> Fetch CRM Entity Fields
-        </button>
-    </div>
-</div>
 <!-- Match Entities Button -->
         <div class="text-center mt-4" id="matchControls" class="text-center mt-8"  style="display: none;">
             <button id="matchEntitiesBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
@@ -227,7 +223,8 @@
                 hideLoadingSpinner();
             }
         });
-                            // Function to fetch CRM entities and populate the dropdown
+        
+    // Function to fetch CRM entities and populate the dropdown
         async function fetchAndPopulateCrmEntities() {
             try {
                 const response = await fetch("/crm-entities", {

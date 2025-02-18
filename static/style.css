@@ -233,48 +233,59 @@ input:focus {
     color: #5c6bc0;
 }
 
-/* Entity Controls Container */
+/* Minimalistic Design */
 #entityControls {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 16px;
-    margin-top: 16px;
+    gap: 8px;
+    margin-top: 12px;
     max-width: 100%;
-    padding: 0 10px;
 }
 
-/* Individual Entity Sections */
 #entityControls > div {
     background-color: #fff;
-    padding: 16px;
-    border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
     width: 100%;
-    max-width: 280px;
+    max-width: 240px;
     text-align: center;
 }
 
-/* Dropdown Styling */
-#entityControls select {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 0.9rem;
-}
-
-/* Button Styling */
+/* Select & Button Styling */
+#entityControls select,
 #entityControls button {
     width: 100%;
-    padding: 8px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
+    padding: 6px;
+    border-radius: 4px;
+}
+
+#entityControls button {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
+    transition: background 0.2s;
 }
 
+#entityControls button:hover {
+    background: #0044cc;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 640px) {
+    #entityControls {
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    #entityControls > div {
+        max-width: 100%;
+        padding: 10px;
+    }
+}
 /* Mobile Responsiveness */
 @media (max-width: 640px) {
     .container {
@@ -307,24 +318,6 @@ input:focus {
     .migration-summary td {
         padding: 10px;
     }
-
-    #entityControls {
-        flex-direction: column;
-        gap: 12px;
-        padding: 0 5px;
-    }
-
-    #entityControls > div {
-        max-width: 100%;
-        padding: 12px;
-    }
-
-    #entityControls select,
-    #entityControls button {
-        font-size: 0.85rem;
-        padding: 6px;
-    }
-
     /* Prevent table overflow */
     .migration-summary {
         overflow-x: auto;

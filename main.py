@@ -111,6 +111,34 @@ FACILIOO_ENTITIES = [
     "webhook-events", "webhook-registrations", "work-orders", "work-order-appointment-requests",
     "work-order-appointment-request-dates", "work-order-feed-entries", "work-order-statuses", "work-order-types"
 ]
+
+FACILIOO_ENT = []
+
+def get_facilioo_entities(access_token: str):
+    try:
+        # Define the Facilioo API endpoint to fetch entities
+        query_url = f"{API_URL}/api/entities"  # Adjust the endpoint as per your Facilioo API
+        response = requests.get(query_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        })
+
+        if response.status_code != 200:
+            raise Exception(f"Failed to fetch Facilioo entities: {response.text}")
+
+        # Parse the response to extract entity names
+        entities_data = response.json().get("value", [])  # Adjust based on the Facilioo API response structure
+        entities = [entity["name"].lower().replace(" ", "-") for entity in entities_data]  # Format entity names
+
+        # Update the global FACILIOO_ENTITIES array
+        global FACILIOO_ENTITIES
+        FACILIOO_ENTITIES = entities
+
+        return entities
+    except Exception as e:
+        logging.error(f"Error fetching Facilioo entities: {str(e)}")
+        raise
+
 #FACILIOO_ENTITIES = [entity.replace("-", "_") for entity in FACILIOO_ENTITIES]
 @app.get("/facilioo-entities")
 async def get_facilioo_entities():
