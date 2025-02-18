@@ -344,3 +344,25 @@ input:focus {
 .crm-only {
     color: blue;
 }
+
+@media (max-width: 640px) {
+    #entityControls {
+        flex-direction: column; /* Stack items vertically */
+        gap: 12px;
+    }
+
+    #entityControls > div {
+        width: 100%; /* Take full width on small screens */
+        max-width: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .migration-summary {
+        overflow-x: auto; /* Enable scrolling */
+    }
+
+    #migrationSummaryTable {
+        min-width: 600px; /* Ensure table is not squished */
+    }
+}
