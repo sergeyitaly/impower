@@ -85,7 +85,12 @@
             <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
                 <i class="fas fa-sync-alt"></i> Start Accounts Migration
             </button>
+            <button id="migrateEntityBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
+                <i class="fas fa-sync-alt"></i> Migration
+            </button>
         </div>
+
+
 
         <!-- Progress Bars -->
         <div id="progressContainer" class="mt-8 max-w-2xl mx-auto" style="display: none;">
@@ -511,6 +516,166 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
             if (accessToken) {fetchAndPopulateCrmEntities();}
         });
 
+
+        
+
+        document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
+            const logsContainer = document.getElementById("logsContainer");
+            logsContainer.innerHTML = "";
+            logsContainer.style.display = "block";
+            resetProgressBars();
+            showLoadingSpinner();
+        
+            try {
+                const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
+                const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
+        
+                // Log start of migration
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
+                //document.getElementById("fetchingMessage").textContent = "Fetching ...";
+
+                const fetchingMessageElement = document.querySelector("#fetchingMessage");
+                if (fetchingMessageElement) {
+                    fetchingMessageElement.textContent = "Fetching ...";
+                } else {
+                    console.error('Fetching message element not found');
+                }
+                document.getElementById("fetchingProgress").style.width = "50%";
+        
+                // Fetch matched fields for the selected entities
+                const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
+                    method: "GET",
+                    headers: {"Authorization": `Bearer ${accessToken}`}
+                });
+        
+                if (!matchedFieldsResponse.ok) {
+                    throw new Error("Failed to fetch matched fields.");
+                }
+        
+                const matchedFieldsData = await matchedFieldsResponse.json();
+                const matchedFields = matchedFieldsData.matched_fields;
+        
+                if (!matchedFields || matchedFields.length === 0) {
+                    throw new Error("No matching fields found for the selected entities.");
+                }
+        
+                // Log matched fields
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved matched fields for migration.</p>`;
+                document.getElementById("fetchingProgress").style.width = "100%";
+                document.getElementById("fetchingMessage").textContent = "Complete";
+        
+                // Fetch entity data from staging
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving data for Facilioo entity: <b>${selectedFaciliooEntity}</b> from staging database...</p>`;
+                const entityDataResponse = await fetch(`/get-entity-data?entity_name=${selectedFaciliooEntity}`, {
+                    method: "GET",
+                    headers: {"Authorization": `Bearer ${accessToken}`}
+                });
+        
+                if (!entityDataResponse.ok) {
+                    throw new Error("Failed to fetch entity data from staging.");
+                }
+        
+                const entityData = await entityDataResponse.json();
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${entityData.length} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
+        
+                // Start migration
+                document.getElementById("migrationMessage").textContent = "Starting migration...";
+                document.getElementById("migrationProgress").style.width = "0%";
+        
+                const response = await fetch("/migrate-entity", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`
+                    },
+                                    body: JSON.stringify({
+                        selected_facilioo_entity: selectedFaciliooEntity,
+                        selected_crm_entity: selectedCrmEntity
+                    }),
+                });
+        
+                if (!response.ok) {
+                    throw new Error("Migration failed.");
+                }
+        
+                const data = await response.json();
+                const totalRecords = data.total_records;
+                let processedRecords = 0;
+        
+                // Process migration results
+                for (const result of data.results) {
+                    processedRecords++;
+                    const progress = (processedRecords / totalRecords) * 100;
+                    document.getElementById("migrationProgress").style.width = `${progress}%`;
+                    document.getElementById("migrationMessage").textContent = `Migrating record ${result.record_id}...`;
+        
+                    logsContainer.innerHTML += `
+                        <p>
+                            <strong>Record ID:</strong> ${result.record_id} <br>
+                            <strong>Staging Status:</strong> ${result.staging_status} <br>
+                            <strong>CRM Status:</strong> ${result.crm_status} <br>
+                            <strong>Action:</strong> ${result.action || "none"} <br>
+                            ${result.error ? `<strong>Error:</strong> ${result.error}` : ""}
+                        </p>
+                    `;
+                    autoScrollLogs();
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+                }
+        
+                // Log migration summary
+                logsContainer.innerHTML += `
+                    <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
+                    <p>Total Records: ${data.total_records}</p>
+                    <p>Successfully Migrated: ${data.success_count}</p>
+                    <p>Updated: ${data.update_count}</p>
+                    <p>Inserted: ${data.insert_count}</p>
+                    <p>Failed: ${data.error_count}</p>
+                `;
+                autoScrollLogs();
+        
+                // Update migration summary table
+                const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
+                summaryTable.innerHTML = `
+                    <tr>
+                        <td class="px-4 py-2">${data.entity_name}</td>
+                        <td class="px-4 py-2">${data.total_records}</td>
+                        <td class="px-4 py-2">${data.success_count + data.error_count}</td>
+                        <td class="px-4 py-2">${data.insert_count}</td>
+                        <td class="px-4 py-2">${data.update_count}</td>
+                        <td class="px-4 py-2">${data.error_count}</td>
+                    </tr>
+                `;
+        
+                // Show the migration summary table
+                document.getElementById("migrationSummary").style.display = "block";
+        
+                // Handle Excel download link
+                if (data.excel_file_url) {
+                    const excelLink = document.getElementById("excelLink");
+                    excelLink.href = data.excel_file_url;
+                    document.getElementById("excelDownload").style.display = "block";
+                }
+        
+                // Update migration status message
+                if (data.error_count === 0) {
+                    document.getElementById("migrationMessage").textContent = "Complete";
+                } else {
+                    document.getElementById("migrationMessage").textContent = "Partial Success";
+                }
+        
+                setTimeout(resetProgressBars, 1000);
+            } catch (error) {
+                console.error("Error:", error);
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration: ${error.message}</p>`;
+                document.getElementById("fetchingMessage").textContent = "Fetching: Error";
+                document.getElementById("migrationMessage").textContent = "Migration: Error";
+            } finally {
+                hideLoadingSpinner();
+            }
+        });
+
+
+
         document.getElementById("migrateBtn").addEventListener("click", async () => {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.innerHTML = "";
@@ -519,12 +684,16 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
             showLoadingSpinner();
             try {
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving users to staging...</p>`;
-                document.getElementById("fetchingMessage").textContent = "Fetching ...";
-                document.getElementById("fetchingProgress").style.width = "50%";
+                const fetchingMessageElement = document.querySelector("#fetchingMessage");
+                if (fetchingMessageElement) {
+                    fetchingMessageElement.textContent = "Fetching ...";
+                } else {
+                    console.error('Fetching message element not found');
+                }                document.getElementById("fetchingProgress").style.width = "50%";
                 const fetchAndSaveData = await fetchAndSaveUsers(accessToken);
                 if (fetchAndSaveData.success) {
                     document.getElementById("fetchingProgress").style.width = "100%";
-                    document.getElementById("fetchingStatusMessage").textContent = "Complete";
+                    document.getElementById("fetchingMessage").textContent = "Complete";
                     logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Users fetched and saved successfully.</p>`;
                 } else {
                     document.getElementById("fetchingStatusMessage").textContent = "Failed";
@@ -582,7 +751,7 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
                     excelLink.href = data.excel_file_url;
                     document.getElementById("excelDownload").style.display = "block";
                 }
-                if (data.error_count === 0) {document.getElementById("migrationStatusMessage").textContent = "Complete";} else {document.getElementById("migrationStatusMessage").textContent = "Partial Success";}
+                if (data.error_count === 0) {document.getElementById("migrationMessage").textContent = "Complete";} else {document.getElementById("migrationMessage").textContent = "Partial Success";}
 
                 setTimeout(resetProgressBars, 1000);
             } catch (error) {
@@ -592,6 +761,8 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
                 document.getElementById("migrationMessage").textContent = "Migration: Error";
             } finally {hideLoadingSpinner();}
         });
+
+
         async function fetchEntitiesList() {
             try {
                 const response = await fetch("/facilioo-entities");
@@ -672,7 +843,6 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
                     document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}... ${progress}%`;
                     if (progress === 100) {
                         eventSource.close();
-                        document.getElementById("fetchingStatusMessage").textContent = "Complete";
                         logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Data fetched and saved successfully for ${selectedEntity}.</p>`;
                         autoScrollLogs();
                         fetchTotalRows(selectedEntity);
@@ -698,13 +868,11 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
                     logsContainer.innerHTML += `<pre>${data.columns.join("\n")}</pre>`; // Display columns in the logs section
                     autoScrollLogs();
                 } else {
-                    document.getElementById("fetchingStatusMessage").textContent = "Failed";
                     logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch and save data for ${selectedEntity}.</p>`;
                     autoScrollLogs();
                 }
             } catch (error) {
                 console.error("Error:", error);
-                document.getElementById("fetchingStatusMessage").textContent = "Error";
                 logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching data for ${selectedEntity}.</p>`;
                 autoScrollLogs();
             } finally {hideLoadingSpinner();}
@@ -732,13 +900,27 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
 
         async function fetchTotalRows(entityName) {
             try {
-                const response = await fetch(`/get-total-rows?entity_name=${entityName}`);
-                if (!response.ok) {throw new Error("Failed to fetch total rows");}
+                const response = await fetch(`/get-total-rows?entity_name=${entityName}`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                    },
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to fetch total rows.");
+                }
+
                 const data = await response.json();
                 const logsContainer = document.getElementById("logsContainer");
-                logsContainer.innerHTML += `<p><i class="fas fa-database"></i> Total Rows Added: ${data.total_records}</p>`;
+                logsContainer.innerHTML += `<p><i class="fas fa-database"></i> Total rows fetched for ${entityName}: ${data.total_records}</p>`;
                 autoScrollLogs();
-            } catch (error) {console.error("Error fetching total rows:", error);}
+            } catch (error) {
+                console.error("Error fetching total rows:", error);
+                const logsContainer = document.getElementById("logsContainer");
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch total rows for ${entityName}.</p>`;
+                autoScrollLogs();
+            }
         }
 
         document.addEventListener("DOMContentLoaded", () => {populateEntityDropdown();});
@@ -786,8 +968,8 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
             document.getElementById("migrationProgress").style.width = "0%";
             document.getElementById("fetchingMessage").textContent = "Fetching : Not Started";
             document.getElementById("migrationMessage").textContent = "Migration: Not Started";
-            document.getElementById("fetchingStatusMessage").textContent = "Pending";
-            document.getElementById("migrationStatusMessage").textContent = "Pending";
+            document.getElementById("fetchingMessage").textContent = "Pending";
+            document.getElementById("migrationMessage").textContent = "Pending";
         }
         function showLoadingSpinner() {document.getElementById("loadingSpinner").style.display = "flex";}
         function hideLoadingSpinner() {document.getElementById("loadingSpinner").style.display = "none";}

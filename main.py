@@ -1,5 +1,5 @@
 import psycopg2
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -318,6 +318,56 @@ async def fetch_entity_fields(entity_name: str, authorization: str = Header(None
         raise HTTPException(status_code=500, detail=f"Error fetching entity fields: {str(e)}")
 
 
+def anonymize_field(field_type: str, data: str) -> str:
+    if data is None or not isinstance(data, str) or not data.strip():
+        # Return a default anonymized value for invalid or missing data
+        return "***"
+
+    if field_type == 'name':
+        # Show the first 2 characters and anonymize the rest
+        return data[:2] + "***" if len(data) > 2 else data + "***"
+    
+    elif field_type == 'email':
+        # Anonymize the email by showing the first part and masking the domain
+        if '@' in data:
+            local_part, domain = data.split('@', 1)
+            return local_part[:2] + "***@" + "***"
+        else:
+            # Handle invalid email format
+            return "***"
+    
+    elif field_type == 'phone':
+        # Show the last 4 digits and anonymize the rest
+        if len(data) >= 4:
+            return "***" + data[-4:]
+        else:
+            # Handle short phone numbers
+            return "***"
+    
+    else:
+        # Default case: anonymize the entire field
+        return "***"
+
+def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields: dict) -> list:
+    query = text(f"SELECT * FROM {entity_name}")
+    result = db.execute(query)
+    # Convert each row (tuple) into a dictionary using column names
+    column_names = result.keys()  # Get column names from the query result
+    records = [dict(zip(column_names, row)) for row in result.fetchall()]  # Convert tuples to dictionaries
+    # Anonymize fields based on matched_fields
+    anonymized_records = []
+    for record in records:
+        anonymized_record = {}
+        for facilioo_field, crm_field in matched_fields.items():
+            if facilioo_field in record:  # Ensure the field exists
+                field_type = crm_field.split('_')[-1]  # Assuming field type is part of the CRM field name
+                anonymized_record[crm_field] = anonymize_field(field_type, record[facilioo_field])
+            else:
+                anonymized_record[crm_field] = None  # Handle missing fields safely
+        anonymized_records.append(anonymized_record)
+
+    return anonymized_records
+
 @app.get("/get-total-rows")
 async def get_total_rows(entity_name: str):
     try:
@@ -439,8 +489,30 @@ async def save_matching_columns(request: MatchingRequest, authorization: str = H
     finally:
         db.close()
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
+
+@app.get("/get-entity-data")
+async def get_entity_data(entity_name: str, db: Session = Depends(get_db), authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        query = text(f"SELECT * FROM {entity_name}")  # Replace with your table naming convention
+        result = db.execute(query)
+        entity_data = [dict(row) for row in result.mappings()]
+        if not entity_data:
+            raise HTTPException(status_code=404, detail=f"No data found for entity: {entity_name}")
+        return {"success": True, "data": entity_data}
+    except Exception as e:
+        logger.error(f"Error fetching entity data for {entity_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching entity data: {str(e)}")
+    
 @app.get("/get-matching-fields")
 async def get_matching_fields(selectedFaciliooEntity: str, selectedCrmEntity: str, authorization: str = Header(None)):
     db = SessionLocal()
@@ -474,7 +546,7 @@ async def get_matching_fields(selectedFaciliooEntity: str, selectedCrmEntity: st
     finally:
         db.close()
 
-        
+
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
@@ -980,6 +1052,65 @@ async def get_users():
         raise HTTPException(status_code=404, detail="No users found in the staging database")
     return users
 
+
+def migrate_entity_to_crm(entity_data: dict, matched_fields: dict, selected_crm_entity: str):
+    access_token = get_crm_access_token()
+    crm_url = f"{CRM_URL}/{selected_crm_entity}"  # Dynamically set based on selected CRM entity
+    crm_data = {crm_field: entity_data[crm_field] for facilioo_field, crm_field in matched_fields.items()}
+    try:
+        unique_field = "emailaddress1"  # Adjust based on your CRM entity's unique field
+        encoded_value = quote(entity_data[unique_field])
+        query_url = f"{crm_url}?$filter={unique_field} eq '{encoded_value}'"
+        response = requests.get(query_url, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        })
+        if response.status_code == 200:
+            try:
+                existing_records = response.json().get("value", [])
+            except Exception as e:
+                logger.error(f"Error parsing CRM response: {str(e)}")
+                return {"success": False, "action": "query_failed", "error": str(e)}
+            if existing_records:
+                record_id = existing_records[0]['id']  # Assuming 'id' is the primary key field in CRM
+                update_url = f"{crm_url}({record_id})"
+                
+                update_response = requests.patch(update_url, headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }, data=json.dumps(crm_data))
+
+                if update_response.status_code in [200, 204]:
+                    logger.info(f"Successfully updated record {record_id} in CRM.")
+                    return {"success": True, "action": "updated"}
+                else:
+                    logger.error(f"Failed to update record {record_id} in CRM. "
+                                 f"Status code: {update_response.status_code}, Response: {update_response.text}")
+                    return {"success": False, "action": "update_failed"}
+            else:
+                # Record does not exist → Create a new record
+                create_response = requests.post(crm_url, headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                }, data=json.dumps(crm_data))
+
+                if create_response.status_code in [200, 201, 204]:  # Allow multiple success codes
+                    logger.info(f"Successfully inserted new record into CRM. Response: {create_response.text}")
+                    return {"success": True, "action": "inserted"}
+                else:
+                    logger.error(f"Failed to insert new record into CRM. "
+                                f"Status code: {create_response.status_code}, Response: {create_response.text}")
+                    return {"success": False, "action": "creation_failed"}
+        else:
+            logger.error(f"Failed to query CRM for existing records. Status code: {response.status_code}, Response: {response.text}")
+            return {"success": False, "action": "query_failed"}
+
+    except Exception as e:
+        logger.error(f"An error occurred while migrating entity data to CRM: {str(e)}")
+        return {"success": False, "action": "error", "error": str(e)}
+
+
+
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
     crm_url = f"{CRM_URL}/contacts"
@@ -1080,6 +1211,11 @@ async def download_excel(file_name: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, filename=file_name)
 
+class MigrateEntityRequest(BaseModel):
+    selected_facilioo_entity: str
+    selected_crm_entity: str
+
+
 class MigrateResponse(BaseModel):
     total_records: int
     success_count: int
@@ -1088,7 +1224,134 @@ class MigrateResponse(BaseModel):
     insert_count: int
     entity_name: str  
     results: List[dict]
-    excel_file_url: str
+    excel_file_url: Optional[str]
+
+
+@app.post("/migrate-entity", response_model=MigrateResponse)
+async def migrate_entity(
+    request: MigrateEntityRequest,
+    background_tasks: BackgroundTasks,
+    authorization: str = Header(None)
+):
+    selected_facilioo_entity = request.selected_facilioo_entity
+    selected_crm_entity = request.selected_crm_entity
+
+    # Fetch matched fields for the selected entities
+    matched_fields_response = await get_matching_fields(selected_facilioo_entity, selected_crm_entity, authorization)
+    matched_fields_list = matched_fields_response.get("matched_fields", [])
+
+    if not matched_fields_list:
+        raise HTTPException(status_code=400, detail="No matched fields found for the selected entities.")
+
+    # Transform matched_fields list into a dictionary
+    matched_fields = {}
+    for item in matched_fields_list:
+        if "-" not in item:
+            logger.error(f"Invalid matched field format: {item}. Skipping.")
+            continue
+        facilioo_field, crm_field = item.split("-", 1)
+        matched_fields[facilioo_field] = crm_field.lower()  # Ensure CRM field is lowercase
+
+    # Fetch entity data from the staging database
+    with SessionLocal() as db:
+        entity_data = fetch_entity_data_from_staging(db, selected_facilioo_entity, matched_fields)
+
+    if not entity_data:
+        raise HTTPException(status_code=400, detail="No records found in the staging database.")
+
+    total_records = len(entity_data)
+    success_count = 0
+    error_count = 0
+    update_count = 0
+    insert_count = 0
+    results = []
+    data_to_export = []
+
+    logger.info(f"Starting migration for {total_records} records.")
+
+    for record in entity_data:
+        try:
+            # Log the record for debugging
+            logger.info(f"Processing record: {record}")
+
+            # Skip records with missing critical fields
+            if "emailaddress1" not in record:
+                logger.warning(f"Skipping record {record.get('id')} due to missing 'emailaddress1' field. Fields found: {record.keys()}")
+                error_count += 1
+                results.append({
+                    "record_id": record.get("id"),
+                    "staging_status": "Failed",
+                    "crm_status": "Failed",
+                    "error": "Missing 'emailaddress1' field"
+                })
+                continue
+
+            # Anonymize fields
+            anonymized_data = {}
+            for facilioo_field, crm_field in matched_fields.items():
+                # Map source fields to target CRM fields
+                source_field = facilioo_field  # e.g., "email", "firstName", "lastName", "fullName"
+                target_field = crm_field.lower()  # e.g., "email", "firstname", "lastname", "fullname"
+
+                # Check if the source field exists in the record
+                if source_field not in record:
+                    logger.warning(f"Field '{source_field}' not found in record {record.get('id')}. Using default anonymized value.")
+                    anonymized_data[target_field] = "***"  # Default anonymized value
+                else:
+                    anonymized_data[target_field] = anonymize_field(target_field, record[source_field])
+
+            # Add to export list
+            data_to_export.append(anonymized_data)
+
+            # Migrate to CRM using Plural entity
+            crm_result = migrate_entity_to_crm(anonymized_data, matched_fields, correct_entity_name(selected_crm_entity))
+            if crm_result["success"]:
+                success_count += 1
+                if crm_result["action"] == "updated":
+                    update_count += 1
+                elif crm_result["action"] == "inserted":
+                    insert_count += 1
+            else:
+                error_count += 1
+
+            # Log result
+            results.append({
+                "record_id": record.get("id"),
+                "staging_status": "Success",
+                "crm_status": "Success" if crm_result["success"] else "Failed",
+                "action": crm_result.get("action", "none"),
+                "error": crm_result.get("error", None)
+            })
+
+        except Exception as e:
+            error_count += 1
+            logger.error(f"An error occurred while migrating record {record.get('id')}: {str(e)}", exc_info=True)
+            results.append({
+                "record_id": record.get("id"),
+                "staging_status": "Failed",
+                "crm_status": "Failed",
+                "error": str(e)
+            })
+
+    # Export data to Excel
+    try:
+        excel_file_path = export_to_excel(data_to_export, selected_facilioo_entity)
+        background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
+    except Exception as e:
+        logger.error(f"Failed to export data to Excel: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
+
+    # Return response
+    return {
+        "total_records": total_records,
+        "success_count": success_count,
+        "error_count": error_count,
+        "update_count": update_count,
+        "insert_count": insert_count,
+        "entity_name": selected_facilioo_entity,
+        "results": results,
+        "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
+    }
 
 @app.post("/migrate", response_model=MigrateResponse)
 async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTasks):
