@@ -30,6 +30,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 import re
+from sqlalchemy.exc import ProgrammingError
 
 
 logger = logging.getLogger(__name__)
@@ -365,45 +366,74 @@ async def get_entity_columns(entity_name: str):
     
 
 
-class MatchedField(BaseModel):
-    selectedFaciliooEntity: str
-    selectedCrmEntity: str
 
 def clean_entity_name(name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_\- ]", "", name).strip()
 
+class MatchingRequest(BaseModel):
+    selectedFaciliooEntity: str
+    selectedCrmEntity: str
+    matchedFields: List[str]
+
 @app.post("/save-matching-columns")
-async def save_matching_columns(matchedFields: List[MatchedField], authorization: str = Header(None)):
+async def save_matching_columns(request: MatchingRequest, authorization: str = Header(None)):
+    db = SessionLocal()
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    print("Received payload:", matchedFields)  # Debugging line
-
-    db = SessionLocal()
 
     try:
-        for matchedField in matchedFields:
-            selectedFaciliooEntity = clean_entity_name(matchedField.selectedFaciliooEntity)
-            selectedCrmEntity = clean_entity_name(matchedField.selectedCrmEntity)
+        selectedFaciliooEntity = clean_entity_name(request.selectedFaciliooEntity)
+        selectedCrmEntity = clean_entity_name(request.selectedCrmEntity)
 
-            if not selectedFaciliooEntity or not selectedCrmEntity:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Both 'selectedFaciliooEntity' and 'selectedCrmEntity' are required."
-                )
+        if not selectedFaciliooEntity or not selectedCrmEntity:
+            raise HTTPException(status_code=400, detail="Both entities must be provided.")
 
-            # Format column name as "selectedFaciliooEntity - selectedCrmEntity"
-            column_name = f"{selectedFaciliooEntity} - {selectedCrmEntity}"
-            
-            # Add column to the matching table if it doesn't already exist
-            print(f"Adding column: {column_name}")  # Debugging line
-            db.execute(text(f'ALTER TABLE matching_table ADD COLUMN IF NOT EXISTS "{column_name}" TEXT'))
+        entity_pair = f"{selectedFaciliooEntity}-{selectedCrmEntity}"
+
+        # Ensure the table exists with the required structure
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS matching_table (
+                entity_pair TEXT PRIMARY KEY,
+                matched_fields JSONB
+            )
+        """))
+        db.commit()
+
+        # Filter out null or empty values from matchedFields
+        non_empty_fields = [field.strip() for field in request.matchedFields if field and field.strip()]
+
+        if not non_empty_fields:
+            raise HTTPException(status_code=400, detail="No valid matched fields to insert.")
+
+        # Check if the entity pair already exists
+        existing_row = db.execute(
+            text("SELECT matched_fields FROM matching_table WHERE entity_pair = :entity_pair"),
+            {"entity_pair": entity_pair}
+        ).fetchone()
+
+        if existing_row:
+            # Merge new fields with existing ones, ensuring uniqueness
+            existing_fields = set(existing_row[0]) if existing_row[0] else set()
+            new_fields = set(non_empty_fields)
+            all_fields = list(existing_fields | new_fields)
+
+            db.execute(
+                text("UPDATE matching_table SET matched_fields = :fields WHERE entity_pair = :entity_pair"),
+                {"fields": json.dumps(all_fields), "entity_pair": entity_pair}
+            )
+        else:
+            # Insert new row
+            db.execute(
+                text("INSERT INTO matching_table (entity_pair, matched_fields) VALUES (:entity_pair, :fields)"),
+                {"entity_pair": entity_pair, "fields": json.dumps(non_empty_fields)}
+            )
 
         db.commit()
-        return {"success": True, "message": f"Successfully added {len(matchedFields)} columns to matching_table."}
+        return {"success": True, "message": f"Successfully saved {len(non_empty_fields)} matched fields for '{entity_pair}'."}
 
     except Exception as e:
         db.rollback()
-        print("Error saving matching columns:", str(e))  # Debugging line
+        print("Error saving matching columns:", str(e))
         raise HTTPException(status_code=500, detail=f"Error saving matching columns: {str(e)}")
 
     finally:
@@ -411,7 +441,40 @@ async def save_matching_columns(matchedFields: List[MatchedField], authorization
 
 
 
-# Helper function to generate a random string for anonymization
+@app.get("/get-matching-fields")
+async def get_matching_fields(selectedFaciliooEntity: str, selectedCrmEntity: str, authorization: str = Header(None)):
+    db = SessionLocal()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        selectedFaciliooEntity = clean_entity_name(selectedFaciliooEntity)
+        selectedCrmEntity = clean_entity_name(selectedCrmEntity)
+
+        if not selectedFaciliooEntity or not selectedCrmEntity:
+            raise HTTPException(status_code=400, detail="Both entities must be provided.")
+
+        entity_pair = f"{selectedFaciliooEntity}-{selectedCrmEntity}"
+
+        # Fetch the existing JSON data for the entity pair
+        existing_row = db.execute(
+            text("SELECT matched_fields FROM matching_table WHERE entity_pair = :entity_pair"),
+            {"entity_pair": entity_pair}
+        ).fetchone()
+
+        if existing_row:
+            return {"success": True, "matched_fields": existing_row[0]}
+        else:
+            return {"success": True, "matched_fields": None}
+
+    except Exception as e:
+        print("Error fetching matching fields:", str(e))
+        raise HTTPException(status_code=500, detail=f"Error fetching matching fields: {str(e)}")
+
+    finally:
+        db.close()
+
+        
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
