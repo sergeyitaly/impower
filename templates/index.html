@@ -6,19 +6,10 @@
     <title>Dynamics 365 Migration</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
-    <style>
-        .progress-bar {
-            transition: width 0.5s ease-in-out;
-        }
-        .loading-spinner {
-            border-top-color: #3490dc;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css"> <!-- Link to external styles.css -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
 </head>
 <body class="bg-gray-100">
     <div class="container mx-auto p-4">
@@ -63,12 +54,31 @@
                 </button>
             </div>
         </div>
+
 <!-- Match Entities Button -->
-        <div class="text-center mt-4" id="matchControls" class="text-center mt-8"  style="display: none;">
-            <button id="matchEntitiesBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
-                <i class="fas fa-exchange-alt"></i> Match Entities
+<div class="text-center mt-4" id="matchControls" style="display: none;">
+    <button id="matchEntitiesBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
+        <i class="fas fa-exchange-alt"></i> Match Entities
+    </button>
+</div>
+
+        <!-- Dropdown for Matched Fields -->
+        <div class="text-center mt-4" id="matchedFieldsDropdownContainer" style="display: none;">
+            <label for="matchedFieldsDropdown" class="block text-sm font-medium text-gray-700">
+                Select Matched Fields:
+            </label>
+            <select id="matchedFieldsDropdown" multiple size="6"
+                class="mt-1 block w-160 mx-auto px-3 py-2 border border-gray-400 rounded-lg shadow-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                <!-- Options will be populated dynamically -->
+            </select>
+        </div>
+
+        <div class="text-center mt-4" id="saveMatchingBtnContainer" style="display: none;">
+            <button id="saveMatchingBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
+                Save Matching
             </button>
         </div>
+        
 
         <!-- Migration Button -->
         <div id="migrationControls" class="text-center mt-8" style="display: none;">
@@ -101,18 +111,6 @@
                 <div class="w-full bg-gray-200 rounded-full h-2.5">
                     <div id="migrationProgress" class="progress-bar bg-green-500 h-2.5 rounded-full" style="width: 0%"></div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Status Cards -->
-        <div id="statusCards" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8 max-w-2xl mx-auto" style="display: none;">
-            <div class="bg-white p-4 rounded-lg shadow-md">
-                <h3 class="text-lg font-semibold"><i class="fas fa-download"></i> Fetching Status</h3>
-                <p id="fetchingStatusMessage" class="text-gray-600">Pending</p>
-            </div>
-            <div class="bg-white p-4 rounded-lg shadow-md">
-                <h3 class="text-lg font-semibold"><i class="fas fa-database"></i> Migration Status</h3>
-                <p id="migrationStatusMessage" class="text-gray-600">Pending</p>
             </div>
         </div>
 
@@ -163,28 +161,84 @@
 
     <script>
         let accessToken = null;
+
+        $(document).ready(function () {
+            $("#matchedFieldsDropdown").select2({
+                placeholder: "Select matched fields",
+                allowClear: true,
+                width: "25%"
+            });
+            $("#matchedFieldsDropdown").on("change", function () {
+                $("#saveMatchingBtnContainer").toggle($(this).val().length > 0);
+            });
+            
+            $("#saveMatchingBtn").on("click", async function () {
+                const selectedFields = $("#matchedFieldsDropdown").val();
+                if (!selectedFields || selectedFields.length === 0) {
+                    alert("Please select at least one matched field.");
+                    return;
+                }
+                const payload = {
+                    matchedFields: selectedFields.map(field => {
+                        const parts = field.split(/\s*-\s*/); // Splits on hyphen with or without spaces
+                        if (parts.length < 2) {
+                            console.error("Invalid field format:", field);
+                            return null; // Skip invalid entries
+                        }
+                        return {
+                            selectedFaciliooEntity: parts[0].trim(),
+                            selectedCrmEntity: parts[1].trim()
+                        };
+                    }).filter(item => item !== null) // Remove invalid entries
+                };
+                
+
+                if (payload.matchedFields.length === 0) {
+                    alert("No valid matched fields selected.");
+                    return;
+                }
+                console.log("Payload being sent:", payload); // Debugging line
+                try {
+                    const response = await fetch("/save-matching-columns", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${accessToken}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+        
+                    const result = await response.json();
+                    if (response.ok) {alert(result.message);} else {alert(`Error: ${result.detail}`);}
+                } catch (error) {
+                    console.error("Error saving matching columns:", error);
+                    alert("An error occurred while saving matching columns.");
+                }
+            });
+
+
+        });
+
         document.getElementById("toggleLogs").addEventListener("click", function() {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.style.display = logsContainer.style.display === "none" ? "block" : "none";
             this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
         });
+
+
         function autoScrollLogs() {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.scrollTop = logsContainer.scrollHeight; // Scroll to the bottom
         }
 
-
         document.getElementById("authenticateBtn").addEventListener("click", async () => {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
-
             if (!email || !password) {
                 alert("Please enter both email and password.");
                 return;
             }
-
             showLoadingSpinner();
-
             try {
                 const response = await fetch("/authenticate", {
                     method: "POST",
@@ -201,86 +255,59 @@
 
                 const data = await response.json();
                 accessToken = data.access_token; // Store token globally
-
-                // Hide auth form and show controls
                 document.getElementById("authForm").style.display = "none";
                 document.getElementById("migrationControls").style.display = "block";
                 document.getElementById("matchControls").style.display = "block";
-                //document.getElementById("fetchEntitiesControls").style.display = "block";
-                //document.getElementById("fetchEntitiesControlsCRM").style.display = "block";
                 document.getElementById("progressContainer").style.display = "block";
                 document.getElementById("logsSection").style.display = "block";
-                document.getElementById("statusCards").style.display = "grid";
                 document.getElementById("entityControls").style.display = "flex";
-
-                // Call function to fetch CRM entities
                 await fetchAndPopulateCrmEntities();
-
             } catch (error) {
                 console.error("Error during authentication:", error);
                 alert(`Authentication failed: ${error.message}`);
-            } finally {
-                hideLoadingSpinner();
-            }
+            } finally {hideLoadingSpinner();}
         });
-        
-    // Function to fetch CRM entities and populate the dropdown
-        async function fetchAndPopulateCrmEntities() {
-            try {
-                const response = await fetch("/crm-entities", {
-                    method: "GET",
-                    headers: {
-                        "Authorization": `Bearer ${accessToken}`, // Ensure token is set
-                        "Content-Type": "application/json",
-                    },
-                });
 
-                if (!response.ok) {
-                    throw new Error("Failed to fetch CRM entities");
+       async function fetchAndPopulateCrmEntities() {
+        try {
+            const response = await fetch("/crm-entities", {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${accessToken}`,
+                    "Content-Type": "application/json"
                 }
+            });
 
-                const data = await response.json();
-                if (!data.entities || !Array.isArray(data.entities)) {
-                    throw new Error("Invalid API response format");
-                }
-
-                // Populate dropdown
-                const entitySelect = document.getElementById("entitySelect");
-                entitySelectCRM.innerHTML = '<option value="">-- Select a CRM Entity --</option>';
-
-                data.entities.forEach(entity => {
-                    const option = document.createElement("option");
-                    option.value = entity;
-                    option.textContent = entity.replace(/-/g, " "); // Replace hyphens with spaces
-                    entitySelectCRM.appendChild(option);
-                });
-
-                console.log("CRM entities loaded successfully.");
-
-            } catch (error) {
-                console.error("Error fetching CRM entities:", error);
-                alert("Failed to fetch CRM entities. Please try again.");
-            }
+            if (!response.ok) {
+                throw new Error("Failed to fetch CRM entities");}
+            const data = await response.json();
+            if (!data.entities || !Array.isArray(data.entities)) {throw new Error("Invalid API response format");}
+            const entitySelectCRM = document.getElementById("entitySelectCRM");
+            entitySelectCRM.innerHTML = '<option value="">-- Select a CRM Entity --</option>';
+            data.entities.forEach(entity => {
+                const option = document.createElement("option");
+                option.value = entity;
+                option.textContent = entity.replace(/-/g, " "); // Replace hyphens with spaces
+                entitySelectCRM.appendChild(option);
+            });
+            console.log("CRM entities loaded successfully.");
+        } catch (error) {
+            console.error("Error fetching CRM entities:", error);
+            alert("Failed to fetch CRM entities. Please try again.");
         }
+    }
         document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
             const faciliooEntitySelect = document.getElementById("entitySelect");
             const crmEntitySelect = document.getElementById("entitySelectCRM");
-        
             const selectedFaciliooEntity = faciliooEntitySelect.value;
             const selectedCrmEntity = crmEntitySelect.value;
-        
             if (!selectedFaciliooEntity || !selectedCrmEntity) {
-                alert("Please select both Facilioo and CRM entities.");
-                return;
-            }
-        
+                alert("Please select both Facilioo and CRM entities.");return;}
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
             autoScrollLogs();
             logsContainer.style.display = "block";
-        
             try {
-                // Fetch fields for both Facilioo and CRM entities
                 const [faciliooResponse, crmResponse] = await Promise.all([
                     fetch(`/fetch-entity-fields?entity_name=${selectedFaciliooEntity}`, {
                         method: "POST",
@@ -299,30 +326,20 @@
                     }),
                 ]);
         
-                if (!faciliooResponse.ok || !crmResponse.ok) {
-                    throw new Error("Failed to fetch entity fields.");
-                }
-        
+                if (!faciliooResponse.ok || !crmResponse.ok) {throw new Error("Failed to fetch entity fields.");}
                 const faciliooData = await faciliooResponse.json();
                 const crmData = await crmResponse.json();
-        
                 if (faciliooData.success && crmData.success) {
                     const faciliooFields = faciliooData.columns;
                     const crmFields = crmData.columns;
-        
-                    // Function to check if a field is entirely a part of another field
                     const isEntirelyPartOf = (field1, field2) => {
                         const lowerField1 = field1.toLowerCase();
                         const lowerField2 = field2.toLowerCase();
                         return lowerField2.includes(lowerField1) || lowerField1.includes(lowerField2);
                     };
-        
-                    // Separate matched fields and unique fields
                     const matchedFields = [];
                     const uniqueFaciliooFields = [];
                     const uniqueCrmFields = [];
-        
-                    // Check for 100% matches and partial matches
                     faciliooFields.forEach(faciliooField => {
                         let isMatched = false;
                         crmFields.forEach(crmField => {
@@ -331,7 +348,6 @@
                                 matchedFields.push({ faciliooField, crmField, isExactMatch: true });
                                 isMatched = true;
                             } else if (isEntirelyPartOf(faciliooField, crmField)) {
-                                // Partial match (Facilioo field is entirely a part of CRM field or vice versa)
                                 matchedFields.push({ faciliooField, crmField, isExactMatch: false });
                                 isMatched = true;
                             }
@@ -340,61 +356,60 @@
                             uniqueFaciliooFields.push(faciliooField); // Unique to Facilioo
                         }
                     });
-        
-                    // Check for CRM-only fields
                     crmFields.forEach(crmField => {
                         if (!faciliooFields.some(faciliooField => 
                             faciliooField.toLowerCase() === crmField.toLowerCase() || 
                             isEntirelyPartOf(faciliooField, crmField))
-                        ) {
-                            uniqueCrmFields.push(crmField); // Unique to CRM
-                        }
+                        ) {uniqueCrmFields.push(crmField);}
                     });
-        
-                    // Start table creation
                     let tableHtml = `<table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.2;">
                                         <tr>
                                             <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
                                             <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
                                             <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
                                         </tr>`;
-        
                     // Fill table rows with Facilioo, CRM, and matched fields
                     const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
                     for (let i = 0; i < maxLength; i++) {
                         tableHtml += "<tr>";
-        
-                        // Facilioo column (Unique fields or empty if matched)
                         const faciliooField = uniqueFaciliooFields[i];
                         tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
                             faciliooField ? `<span style="color: magenta;">✘ ${faciliooField}</span>` : ''
                         }</td>`;
-        
-                        // CRM column (Unique fields or empty if matched)
                         const crmField = uniqueCrmFields[i];
                         tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
                             crmField ? `<span style="color: blue;">✘ ${crmField}</span>` : ''
                         }</td>`;
-        
                         // Matched fields column
                         const matchedField = matchedFields[i];
                         tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
                             matchedField ? 
                                 (matchedField.isExactMatch ? 
                                     `<span style="color: green; font-weight: bold;">✔ ${matchedField.faciliooField}</span>` : 
-                                    //`<span style="color: black;">${matchedField.faciliooField} - ${matchedField.crmField}</span>`) : 
                                     `<span style="color: magenta;">${matchedField.faciliooField}</span> - <span style="color: blue;">${matchedField.crmField}</span>`) : 
-
                                 ''
                         }</td>`;
-        
                         tableHtml += "</tr>";
                     }
-        
                     tableHtml += "</table>";
-        
                     logsContainer.innerHTML += tableHtml;
                     autoScrollLogs();
+                // Populate the dropdown with matched fields
+                const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
+                matchedFieldsDropdown.innerHTML = ""; // Clear existing options
+                matchedFields.forEach(matchedField => {
+                    const option = document.createElement("option");
+                    option.value = `${matchedField.faciliooField}-${matchedField.crmField}`;
+                    option.textContent = matchedField.isExactMatch ? 
+                        `✔ ${matchedField.faciliooField}` : 
+                        `${matchedField.faciliooField} - ${matchedField.crmField}`;
+                    matchedFieldsDropdown.appendChild(option);
+                });
+                document.getElementById("matchedFieldsDropdown").addEventListener("change", function () {
+                    const selectedOptions = Array.from(this.selectedOptions).map(option => option.value);
+                    console.log("Selected Matched Fields:", selectedOptions);
+                });
+                document.getElementById("matchedFieldsDropdownContainer").style.display = "block";
                 } else {
                     logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch entity fields.</p>`;
                     autoScrollLogs();
@@ -404,35 +419,23 @@
                 logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while matching entities.</p>`;
                 autoScrollLogs();
             }
-        });
-        
+        });        
 
-
-
-
-
-        // Call the function to fetch and populate CRM entities when the page loads
         document.addEventListener("DOMContentLoaded", () => {
-            if (accessToken) {
-                fetchAndPopulateCrmEntities();
-            }
+            if (accessToken) {fetchAndPopulateCrmEntities();}
         });
+
         document.getElementById("migrateBtn").addEventListener("click", async () => {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.innerHTML = "";
             logsContainer.style.display = "block";
-
             resetProgressBars();
             showLoadingSpinner();
-
             try {
-                // Fetch and save users
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching and saving users to staging...</p>`;
                 document.getElementById("fetchingMessage").textContent = "Fetching ...";
                 document.getElementById("fetchingProgress").style.width = "50%";
-
                 const fetchAndSaveData = await fetchAndSaveUsers(accessToken);
-
                 if (fetchAndSaveData.success) {
                     document.getElementById("fetchingProgress").style.width = "100%";
                     document.getElementById("fetchingStatusMessage").textContent = "Complete";
@@ -442,47 +445,32 @@
                     logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch and save users.</p>`;
                     return;
                 }
-
                 // Retrieve users from staging
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving users from staging database...</p>`;
                 const users = await getUsersFromStaging();
                 logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${users.length} users from staging.</p>`;
-
-                // Start migration
                 document.getElementById("migrationMessage").textContent = "Starting migration...";
                 document.getElementById("migrationProgress").style.width = "0%";
-
                 const response = await fetch("/migrate", {
                     method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
+                    headers: {"Content-Type": "application/json",},
                     body: JSON.stringify({ user_ids: users.map(user => user.id) }),
                 });
-
-                if (!response.ok) {
-                    throw new Error("Migration failed");
-                }
-
+                if (!response.ok) {throw new Error("Migration failed");}
                 const data = await response.json();
                 const totalUsers = data.total_records;
                 let processedUsers = 0;
-
                 for (const result of data.results) {
                     processedUsers++;
                     const progress = (processedUsers / totalUsers) * 100;
                     document.getElementById("migrationProgress").style.width = `${progress}%`;
                     document.getElementById("migrationMessage").textContent = `Migrating user ${result.user_id}...`;
-
                     logsContainer.innerHTML += `<p><strong>User ID:</strong> ${result.user_id} <br> <strong>Staging Status:</strong> ${result.staging_status} <br><strong>CRM Status:</strong> ${result.crm_status} <br><strong>Action:</strong> ${result.action || "none"} <br>${result.error ? `<strong>Error:</strong> ${result.error}` : ""}</p>`;
                     autoScrollLogs();
-                    // Introduce a small delay to allow the UI to update
                     await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
                 }
-
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Migration Summary:</p><p>Total Records: ${data.total_records}</p><p>Successfully Migrated: ${data.success_count}</p><p>Updated: ${data.update_count}</p><p>Inserted: ${data.insert_count}</p><p>Failed: ${data.error_count}</p>`;
                 autoScrollLogs();
-                // Populate the migration summary table dynamically
                 const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
                 summaryTable.innerHTML = `
                     <tr>
@@ -502,21 +490,13 @@
                 if (crmContactsUrl) {
                     document.getElementById("crmLink").href = crmContactsUrl;
                     document.getElementById("crmLinkContainer").style.display = "block";
-                } else {
-                    console.error('CRM contacts URL is not available');
-                }
-
+                } else {console.error('CRM contacts URL is not available');}
                 if (data.excel_file_url) {
                     const excelLink = document.getElementById("excelLink");
                     excelLink.href = data.excel_file_url;
                     document.getElementById("excelDownload").style.display = "block";
                 }
-
-                if (data.error_count === 0) {
-                    document.getElementById("migrationStatusMessage").textContent = "Complete";
-                } else {
-                    document.getElementById("migrationStatusMessage").textContent = "Partial Success";
-                }
+                if (data.error_count === 0) {document.getElementById("migrationStatusMessage").textContent = "Complete";} else {document.getElementById("migrationStatusMessage").textContent = "Partial Success";}
 
                 setTimeout(resetProgressBars, 1000);
             } catch (error) {
@@ -524,13 +504,8 @@
                 logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration.</p>`;
                 document.getElementById("fetchingMessage").textContent = "Fetching: Error";
                 document.getElementById("migrationMessage").textContent = "Migration: Error";
-            } finally {
-                hideLoadingSpinner();
-            }
+            } finally {hideLoadingSpinner();}
         });
-
-                    
-        // Fetch the list of entities from the backend
         async function fetchEntitiesList() {
             try {
                 const response = await fetch("/facilioo-entities");
@@ -541,27 +516,9 @@
                 return entities;
             } catch (error) {
                 console.error("Error fetching entities list:", error);
-                return [];
+                return []; // Return an empty array or handle the error as needed
             }
         }
-
-        // Populate the dropdown with entities
-        async function populateEntityDropdown() {
-            const entitySelect = document.getElementById("entitySelect");
-            const entities = await fetchEntitiesList();
-
-            // Clear existing options
-            entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
-
-            // Add entities to the dropdown
-            entities.forEach(entity => {
-                const option = document.createElement("option");
-                option.value = entity;
-                option.textContent = entity.replace(/-/g, " "); // Replace hyphens with spaces for display
-                entitySelect.appendChild(option);
-            });
-        }
-
         // Fetch data for the selected entity
         async function fetchEntityData(entityName) {
             try {
@@ -572,33 +529,18 @@
                         "Content-Type": "application/json",
                     },
                 });
-
-                if (!response.ok) {
-                    throw new Error("Failed to fetch entity data");
-                }
-
-                const data = await response.json();
-                return data;
-            } catch (error) {
-                console.error("Error fetching entity data:", error);
-                throw error;
-            }
+                if (!response.ok) {throw new Error("Failed to fetch entity data");}
+                const data = await response.json();return data;
+            } catch (error) {console.error("Error fetching entity data:", error);throw error;}
         }
-
         document.getElementById("fetchEntityBtnCRM").addEventListener("click", async () => {
             const entitySelect = document.getElementById("entitySelectCRM");
             const selectedEntity = entitySelect.value;
-        
-            if (!selectedEntity) {
-                alert("Please select a CRM entity.");
-                return;
-            }
-        
+            if (!selectedEntity) {alert("Please select a CRM entity.");return;}
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Fetching column names for CRM entity: ${selectedEntity}...</p>`;
             autoScrollLogs();
             logsContainer.style.display = "block";
-        
             try {
                 const response = await fetch(`/crm-entity-fields?entity_name=${selectedEntity}`, {
                     method: "GET",
@@ -607,69 +549,47 @@
                         "Content-Type": "application/json",
                     },
                 });
-        
-                if (!response.ok) {
-                    throw new Error("Failed to fetch CRM entity fields");
-                }
-        
+                if (!response.ok) {throw new Error("Failed to fetch CRM entity fields");}
                 const data = await response.json();
-        
                 if (data.success) {
                     logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
                     logsContainer.innerHTML += `<pre>${data.columns.join("\n")}</pre>`; // Display columns in the logs section
                     autoScrollLogs();
-                } else {
-                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;
-                    autoScrollLogs();
-                }
+                } else {logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;autoScrollLogs();}
             } catch (error) {
                 console.error("Error:", error);
                 logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching columns for ${selectedEntity}.</p>`;
                 autoScrollLogs();
             }
         });
-        
 
         // Event listener for the "Fetch Entity Data" button
         document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
             const entitySelect = document.getElementById("entitySelect");
             const selectedEntity = entitySelect.value;
-
             if (!selectedEntity) {
                 alert("Please select an entity.");
-                return;
-            }
-
+                return;}
             showLoadingSpinner();
-
             try {
                 const logsContainer = document.getElementById("logsContainer");
                 logsContainer.innerHTML = "";
                 logsContainer.style.display = "block";
-
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for entity: ${selectedEntity}...</p>`;
                 autoScrollLogs();
                 document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}...`;
                 document.getElementById("fetchingProgress").style.width = "0%";
-
-                // Start listening for progress updates
                 const eventSource = new EventSource(`/stream-progress?entity_name=${selectedEntity}`);
-
                 eventSource.onmessage = function(event) {
                     const progress = parseInt(event.data);
                     document.getElementById("fetchingProgress").style.width = `${progress}%`;
                     document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}... ${progress}%`;
-
                     if (progress === 100) {
                         eventSource.close();
                         document.getElementById("fetchingStatusMessage").textContent = "Complete";
                         logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Data fetched and saved successfully for ${selectedEntity}.</p>`;
                         autoScrollLogs();
-
-                        // Fetch the total number of rows after progress reaches 100%
                         fetchTotalRows(selectedEntity);
-
-                        // Reset progress bar to 0 after 1 second
                         setTimeout(() => {
                             document.getElementById("fetchingProgress").style.width = "0%";
                             document.getElementById("fetchingMessage").textContent = "Fetching: Not Started";
@@ -685,14 +605,9 @@
                     },
                 });
 
-                if (!response.ok) {
-                    throw new Error("Failed to fetch entity data");
-                }
-
+                if (!response.ok) {throw new Error("Failed to fetch entity data");}
                 const data = await response.json();
-
                 if (data.success) {
-                    // Populate the logs section with entity columns
                     logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
                     logsContainer.innerHTML += `<pre>${data.columns.join("\n")}</pre>`; // Display columns in the logs section
                     autoScrollLogs();
@@ -706,32 +621,41 @@
                 document.getElementById("fetchingStatusMessage").textContent = "Error";
                 logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching data for ${selectedEntity}.</p>`;
                 autoScrollLogs();
-            } finally {
-                hideLoadingSpinner();
-            }
+            } finally {hideLoadingSpinner();}
         });
 
-        // Function to fetch the total number of rows after progress reaches 100%
+        // Fetch and populate Facilioo entities dropdown
+        async function populateEntityDropdown() {
+            try {
+                const response = await fetch("/facilioo-entities");
+                if (!response.ok) {throw new Error("Failed to fetch entities list");}
+                const entities = await response.json();
+                const entitySelect = document.getElementById("entitySelect");
+                entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
+                entities.forEach(entity => {
+                    const option = document.createElement("option");
+                    option.value = entity;
+                    option.textContent = entity.replace(/-/g, " "); 
+                    entitySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Error fetching entities list:", error);
+                alert("Failed to fetch Facilioo entities. Please try again.");
+            }
+        }
+
         async function fetchTotalRows(entityName) {
             try {
                 const response = await fetch(`/get-total-rows?entity_name=${entityName}`);
-                if (!response.ok) {
-                    throw new Error("Failed to fetch total rows");
-                }
-
+                if (!response.ok) {throw new Error("Failed to fetch total rows");}
                 const data = await response.json();
                 const logsContainer = document.getElementById("logsContainer");
                 logsContainer.innerHTML += `<p><i class="fas fa-database"></i> Total Rows Added: ${data.total_records}</p>`;
                 autoScrollLogs();
-            } catch (error) {
-                console.error("Error fetching total rows:", error);
-            }
-        }                // Populate the dropdown when the page loads
-                document.addEventListener("DOMContentLoaded", () => {
-                    populateEntityDropdown();
-                });
+            } catch (error) {console.error("Error fetching total rows:", error);}
+        }
 
-
+        document.addEventListener("DOMContentLoaded", () => {populateEntityDropdown();});
         async function fetchAndSaveUsers(accessToken) {
             try {
                 const response = await fetch("/fetch-and-save-users", {
@@ -741,14 +665,11 @@
                         "Authorization": `Bearer ${accessToken}`,
                     },
                 });
-
                 if (!response.ok) {
                     const errorData = await response.json();
                     throw new Error(errorData.detail || 'Failed to fetch and save users');
                 }
-
-                const data = await response.json();
-                return data;
+                const data = await response.json();return data;
             } catch (error) {
                 console.error("Error during fetch and save users:", error);
                 throw new Error(error.message || 'Error fetching and saving users');
@@ -758,11 +679,8 @@
         async function getUsersFromStaging() {
             try {
                 const response = await fetch("/users");
-                if (!response.ok) {
-                    throw new Error('Failed to fetch users from staging');
-                }
-                const users = await response.json();
-                return users;
+                if (!response.ok) {throw new Error('Failed to fetch users from staging');}
+                const users = await response.json();return users;
             } catch (error) {
                 console.error("Error fetching users from staging:", error);
                 throw new Error('Error fetching users from staging');
@@ -772,17 +690,11 @@
         async function getCrmContactsUrl() {
             try {
                 const response = await fetch('/api/crm-contacts-url');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch CRM contacts URL');
-                }
+                if (!response.ok) {throw new Error('Failed to fetch CRM contacts URL');}
                 const data = await response.json();
                 return data.crmContactsUrl;
-            } catch (error) {
-                console.error('Error fetching CRM contacts URL:', error);
-                return null;
-            }
+            } catch (error) {console.error('Error fetching CRM contacts URL:', error);return null;}
         }
-
         function resetProgressBars() {
             document.getElementById("fetchingProgress").style.width = "0%";
             document.getElementById("migrationProgress").style.width = "0%";
@@ -791,14 +703,8 @@
             document.getElementById("fetchingStatusMessage").textContent = "Pending";
             document.getElementById("migrationStatusMessage").textContent = "Pending";
         }
-
-        function showLoadingSpinner() {
-            document.getElementById("loadingSpinner").style.display = "flex";
-        }
-
-        function hideLoadingSpinner() {
-            document.getElementById("loadingSpinner").style.display = "none";
-        }
+        function showLoadingSpinner() {document.getElementById("loadingSpinner").style.display = "flex";}
+        function hideLoadingSpinner() {document.getElementById("loadingSpinner").style.display = "none";}
     </script>
 </body>
 </html>

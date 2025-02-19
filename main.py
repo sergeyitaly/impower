@@ -29,6 +29,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Tab
 from sqlalchemy.dialects.postgresql import JSONB
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
+import re
 
 
 logger = logging.getLogger(__name__)
@@ -362,6 +363,54 @@ async def get_entity_columns(entity_name: str):
         logger.error(f"Error fetching columns for entity {entity_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching columns for entity {entity_name}: {str(e)}")
     
+
+
+class MatchedField(BaseModel):
+    selectedFaciliooEntity: str
+    selectedCrmEntity: str
+
+def clean_entity_name(name: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_\- ]", "", name).strip()
+
+@app.post("/save-matching-columns")
+async def save_matching_columns(matchedFields: List[MatchedField], authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    print("Received payload:", matchedFields)  # Debugging line
+
+    db = SessionLocal()
+
+    try:
+        for matchedField in matchedFields:
+            selectedFaciliooEntity = clean_entity_name(matchedField.selectedFaciliooEntity)
+            selectedCrmEntity = clean_entity_name(matchedField.selectedCrmEntity)
+
+            if not selectedFaciliooEntity or not selectedCrmEntity:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Both 'selectedFaciliooEntity' and 'selectedCrmEntity' are required."
+                )
+
+            # Format column name as "selectedFaciliooEntity - selectedCrmEntity"
+            column_name = f"{selectedFaciliooEntity} - {selectedCrmEntity}"
+            
+            # Add column to the matching table if it doesn't already exist
+            print(f"Adding column: {column_name}")  # Debugging line
+            db.execute(text(f'ALTER TABLE matching_table ADD COLUMN IF NOT EXISTS "{column_name}" TEXT'))
+
+        db.commit()
+        return {"success": True, "message": f"Successfully added {len(matchedFields)} columns to matching_table."}
+
+    except Exception as e:
+        db.rollback()
+        print("Error saving matching columns:", str(e))  # Debugging line
+        raise HTTPException(status_code=500, detail=f"Error saving matching columns: {str(e)}")
+
+    finally:
+        db.close()
+
+
+
 # Helper function to generate a random string for anonymization
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
