@@ -82,7 +82,7 @@
 
         <!-- Migration Button -->
         <div id="migrationControls" class="text-center mt-8" style="display: none;">
-            <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
+            <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200" style="display: none;">
                 <i class="fas fa-sync-alt"></i> Start Accounts Migration
             </button>
             <button id="migrateEntityBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
@@ -159,8 +159,8 @@
         </div>
 
         <!-- Loading Spinner -->
-        <div id="loadingSpinner" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center" style="display: none;">
-            <div class="loading-spinner h-12 w-12 border-4 border-t-4 border-gray-200 rounded-full"></div>
+        <div id="loadingSpinner" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50" style="display: none;">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
     </div>
 
@@ -168,6 +168,11 @@
         let accessToken = null;
 
         $(document).ready(function () {
+
+            let isDropdownChanged = false; // Flag to track dropdown changes
+            const saveMatchingBtn = $("#saveMatchingBtn");
+            saveMatchingBtn.hide();
+
             $("#matchedFieldsDropdown").select2({
                 placeholder: "Select matched fields",
                 allowClear: true,
@@ -176,6 +181,23 @@
 
             $("#matchedFieldsDropdown").on("change", function () {
                 $("#saveMatchingBtnContainer").toggle($(this).val().length > 0);
+                isDropdownChanged = true; // Set the flag to true when dropdown changes
+                saveMatchingBtn.show(); // Show the Save Matching button
+
+            });
+
+            $("#matchedFieldsDropdown").on("select2:select", function (e) {
+                $(".select2-selection__choice").css("background-color", "");
+                $(".select2-selection__choice").first().css("background-color", "yellow");
+                $("#matchedFieldsDropdown option").css("background-color", "");
+                $("#matchedFieldsDropdown option:selected").first().css("background-color", "yellow");
+            });
+        
+            $("#matchedFieldsDropdown").on("select2:unselect", function (e) {
+                $(".select2-selection__choice").css("background-color", "");
+                $(".select2-selection__choice").first().css("background-color", "yellow");
+                $("#matchedFieldsDropdown option").css("background-color", "");
+                $("#matchedFieldsDropdown option:selected").first().css("background-color", "yellow");
             });
 
             $("#saveMatchingBtn").on("click", async function () {
@@ -208,6 +230,10 @@
                         logsContainer.innerHTML += `<p style="color: green;">✅ ${result.message}</p>`;autoScrollLogs();
                     } else {logsContainer.innerHTML += `<p style="color: red;">❌ Error: ${result.detail}</p>`;autoScrollLogs();
                     }
+                    isDropdownChanged = false;
+                    saveMatchingBtn.hide();
+        
+
                 } catch (error) {
                     console.error("Error saving matching columns:", error);
                     logsContainer.innerHTML += `<p style="color: red;">❌ An error occurred while saving matching columns.</p>`;autoScrollLogs();
@@ -358,160 +384,160 @@
     }
 
 
-document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
-    const faciliooEntitySelect = document.getElementById("entitySelect");
-    const crmEntitySelect = document.getElementById("entitySelectCRM");
-    const selectedFaciliooEntity = faciliooEntitySelect.value;
-    const selectedCrmEntity = crmEntitySelect.value;
 
-    if (!selectedFaciliooEntity || !selectedCrmEntity) {
-        alert("Please select both Facilioo and CRM entities.");
-        return;
-    }
-
-    const logsContainer = document.getElementById("logsContainer");
-    logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
-    autoScrollLogs();
-    logsContainer.style.display = "block";
-
-    try {
-        // Fetch entity fields and matched fields
-        const [faciliooResponse, crmResponse, matchedFieldsResponse] = await Promise.all([
-            fetch(`/fetch-entity-fields?entity_name=${selectedFaciliooEntity}`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ entity_name: selectedFaciliooEntity })
-            }),
-            fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                },
-            }),
-            fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                },
-            }),
-        ]);
-
-        if (!faciliooResponse.ok || !crmResponse.ok || !matchedFieldsResponse.ok) {
-            throw new Error("Failed to fetch entity fields or matched fields.");
+    document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
+        const faciliooEntitySelect = document.getElementById("entitySelect");
+        const crmEntitySelect = document.getElementById("entitySelectCRM");
+        const selectedFaciliooEntity = faciliooEntitySelect.value;
+        const selectedCrmEntity = crmEntitySelect.value;
+    
+        if (!selectedFaciliooEntity || !selectedCrmEntity) {
+            alert("Please select both Facilioo and CRM entities.");
+            return;
         }
-
-        const faciliooData = await faciliooResponse.json();
-        const crmData = await crmResponse.json();
-        const matchedFieldsData = await matchedFieldsResponse.json();
-
-        if (faciliooData.success && crmData.success && matchedFieldsData.success) {
-            const faciliooFields = faciliooData.columns;
-            const crmFields = crmData.columns;
-            const existingMatchedFields = matchedFieldsData.matched_fields || [];
-
-            const isEntirelyPartOf = (field1, field2) => {
-                const lowerField1 = field1.toLowerCase();
-                const lowerField2 = field2.toLowerCase();
-                return lowerField2.includes(lowerField1) || lowerField1.includes(lowerField2);
-            };
-
-            const matchedFields = [];
-            const uniqueFaciliooFields = [];
-            const uniqueCrmFields = [];
-
-            faciliooFields.forEach(faciliooField => {
-                let isMatched = false;
-                crmFields.forEach(crmField => {
-                    if (faciliooField.toLowerCase() === crmField.toLowerCase()) {
-                        // 100% match
-                        matchedFields.push({ faciliooField, crmField, isExactMatch: true });
-                        isMatched = true;
-                    } else if (isEntirelyPartOf(faciliooField, crmField)) {
-                        matchedFields.push({ faciliooField, crmField, isExactMatch: false });
-                        isMatched = true;
+    
+        const logsContainer = document.getElementById("logsContainer");
+        logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
+        autoScrollLogs();
+        logsContainer.style.display = "block";
+    
+        try {
+            // Fetch entity fields and matched fields
+            const [faciliooResponse, crmResponse, matchedFieldsResponse] = await Promise.all([
+                fetch(`/fetch-entity-fields?entity_name=${selectedFaciliooEntity}`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ entity_name: selectedFaciliooEntity })
+                }),
+                fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                }),
+                fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                    },
+                }),
+            ]);
+    
+            if (!faciliooResponse.ok || !crmResponse.ok || !matchedFieldsResponse.ok) {
+                throw new Error("Failed to fetch entity fields or matched fields.");
+            }
+    
+            const faciliooData = await faciliooResponse.json();
+            const crmData = await crmResponse.json();
+            const matchedFieldsData = await matchedFieldsResponse.json();
+    
+            if (faciliooData.success && crmData.success && matchedFieldsData.success) {
+                const faciliooFields = faciliooData.columns;
+                const crmFields = crmData.columns;
+                const existingMatchedFields = matchedFieldsData.matched_fields || [];
+    
+                const isEntirelyPartOf = (field1, field2) => {
+                    const lowerField1 = field1.toLowerCase();
+                    const lowerField2 = field2.toLowerCase();
+                    return lowerField2.includes(lowerField1) || lowerField1.includes(lowerField2);
+                };
+    
+                const matchedFields = [];
+                const uniqueFaciliooFields = [];
+                const uniqueCrmFields = [];
+    
+                faciliooFields.forEach(faciliooField => {
+                    let isMatched = false;
+                    crmFields.forEach(crmField => {
+                        if (faciliooField.toLowerCase() === crmField.toLowerCase()) {
+                            // 100% match
+                            matchedFields.push({ faciliooField, crmField, isExactMatch: true });
+                            isMatched = true;
+                        } else if (isEntirelyPartOf(faciliooField, crmField)) {
+                            matchedFields.push({ faciliooField, crmField, isExactMatch: false });
+                            isMatched = true;
+                        }
+                    });
+                    if (!isMatched) {
+                        uniqueFaciliooFields.push(faciliooField); // Unique to Facilioo
                     }
                 });
-                if (!isMatched) {
-                    uniqueFaciliooFields.push(faciliooField); // Unique to Facilioo
+    
+                crmFields.forEach(crmField => {
+                    if (!faciliooFields.some(faciliooField => 
+                        faciliooField.toLowerCase() === crmField.toLowerCase() || 
+                        isEntirelyPartOf(faciliooField, crmField))
+                    ) {
+                        uniqueCrmFields.push(crmField);
+                    }
+                });
+    
+                // Render the table (unchanged)
+                let tableHtml = `<table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.2;">
+                                    <tr>
+                                        <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
+                                        <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
+                                        <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
+                                    </tr>`;
+                const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
+                for (let i = 0; i < maxLength; i++) {
+                    tableHtml += "<tr>";
+                    const faciliooField = uniqueFaciliooFields[i];
+                    tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
+                        faciliooField ? `<span style="color: magenta;">✘ ${faciliooField}</span>` : ''
+                    }</td>`;
+                    const crmField = uniqueCrmFields[i];
+                    tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
+                        crmField ? `<span style="color: blue;">✘ ${crmField}</span>` : ''
+                    }</td>`;
+                    const matchedField = matchedFields[i];
+                    tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
+                        matchedField ? 
+                            (matchedField.isExactMatch ? 
+                                `<span style="color: green; font-weight: bold;">✔ ${matchedField.faciliooField}</span>` : 
+                                `<span style="color: magenta;">${matchedField.faciliooField}</span> - <span style="color: blue;">${matchedField.crmField}</span>`) : 
+                            ''
+                    }</td>`;
+                    tableHtml += "</tr>";
                 }
-            });
-
-            crmFields.forEach(crmField => {
-                if (!faciliooFields.some(faciliooField => 
-                    faciliooField.toLowerCase() === crmField.toLowerCase() || 
-                    isEntirelyPartOf(faciliooField, crmField))
-                ) {
-                    uniqueCrmFields.push(crmField);
-                }
-            });
-
-            // Render the table (unchanged)
-            let tableHtml = `<table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.2;">
-                                <tr>
-                                    <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
-                                    <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
-                                    <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
-                                </tr>`;
-            const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
-            for (let i = 0; i < maxLength; i++) {
-                tableHtml += "<tr>";
-                const faciliooField = uniqueFaciliooFields[i];
-                tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
-                    faciliooField ? `<span style="color: magenta;">✘ ${faciliooField}</span>` : ''
-                }</td>`;
-                const crmField = uniqueCrmFields[i];
-                tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
-                    crmField ? `<span style="color: blue;">✘ ${crmField}</span>` : ''
-                }</td>`;
-                const matchedField = matchedFields[i];
-                tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
-                    matchedField ? 
-                        (matchedField.isExactMatch ? 
-                            `<span style="color: green; font-weight: bold;">✔ ${matchedField.faciliooField}</span>` : 
-                            `<span style="color: magenta;">${matchedField.faciliooField}</span> - <span style="color: blue;">${matchedField.crmField}</span>`) : 
-                        ''
-                }</td>`;
-                tableHtml += "</tr>";
+                tableHtml += "</table>";
+                logsContainer.innerHTML += tableHtml;
+                autoScrollLogs();
+    
+                // Populate the dropdown with matched fields
+                const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
+                matchedFieldsDropdown.innerHTML = ""; // Clear existing options
+                matchedFields.forEach(matchedField => {
+                    const option = document.createElement("option");
+                    option.value = `${matchedField.faciliooField}-${matchedField.crmField}`;
+                    option.textContent = matchedField.isExactMatch ? 
+                        `✔ ${matchedField.faciliooField}` : 
+                        `${matchedField.faciliooField} - ${matchedField.crmField}`;
+    
+                    // Mark the option as selected if it exists in the existingMatchedFields
+                    if (existingMatchedFields.includes(`${matchedField.faciliooField}-${matchedField.crmField}`)) {
+                        option.selected = true;
+                    }
+    
+                    matchedFieldsDropdown.appendChild(option);
+                });
+    
+                // Show the dropdown container
+                document.getElementById("matchedFieldsDropdownContainer").style.display = "block";
+            } else {
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch entity fields.</p>`;
+                autoScrollLogs();
             }
-            tableHtml += "</table>";
-            logsContainer.innerHTML += tableHtml;
-            autoScrollLogs();
-
-            // Populate the dropdown with matched fields
-            const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
-            matchedFieldsDropdown.innerHTML = ""; // Clear existing options
-            matchedFields.forEach(matchedField => {
-                const option = document.createElement("option");
-                option.value = `${matchedField.faciliooField}-${matchedField.crmField}`;
-                option.textContent = matchedField.isExactMatch ? 
-                    `✔ ${matchedField.faciliooField}` : 
-                    `${matchedField.faciliooField} - ${matchedField.crmField}`;
-
-                // Mark the option as selected if it exists in the existingMatchedFields
-                if (existingMatchedFields.includes(`${matchedField.faciliooField}-${matchedField.crmField}`)) {
-                    option.selected = true;
-                }
-
-                matchedFieldsDropdown.appendChild(option);
-            });
-
-            // Show the dropdown container
-            document.getElementById("matchedFieldsDropdownContainer").style.display = "block";
-        } else {
-            logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch entity fields.</p>`;
+        } catch (error) {
+            console.error("Error:", error);
+            logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while matching entities.</p>`;
             autoScrollLogs();
         }
-    } catch (error) {
-        console.error("Error:", error);
-        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while matching entities.</p>`;
-        autoScrollLogs();
-    }
-});
-
+    });
         document.addEventListener("DOMContentLoaded", () => {
             if (accessToken) {fetchAndPopulateCrmEntities();}
         });
@@ -971,8 +997,14 @@ document.getElementById("matchEntitiesBtn").addEventListener("click", async () =
             document.getElementById("fetchingMessage").textContent = "Pending";
             document.getElementById("migrationMessage").textContent = "Pending";
         }
-        function showLoadingSpinner() {document.getElementById("loadingSpinner").style.display = "flex";}
-        function hideLoadingSpinner() {document.getElementById("loadingSpinner").style.display = "none";}
+        function showLoadingSpinner() {
+            $("#loadingSpinner").show(); 
+        }
+        
+        function hideLoadingSpinner() {
+            $("#loadingSpinner").hide();
+        }
+
     </script>
 </body>
 </html>

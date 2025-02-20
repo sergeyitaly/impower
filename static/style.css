@@ -344,3 +344,17 @@ input:focus {
 .crm-only {
     color: blue;
 }
+
+.select2-selection__choice {
+    background-color: yellow !important; /* Ensures selected item gets yellow */
+    color: black !important; /* Ensures text is readable */
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
