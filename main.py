@@ -39,8 +39,8 @@ def validate_and_convert_guid(value):
     except (ValueError, TypeError):
         return None
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 # Load environment variables
 load_dotenv()
 
@@ -181,6 +181,7 @@ def infer_schema_from_record(record: dict) -> list:
             columns.append(Column(column_name, String))  # Default to String for unknown types
     return columns
 
+
 def create_table_for_entity(entity_name: str, sample_record: dict):
     metadata = MetaData()
     columns = infer_schema_from_record(sample_record)
@@ -237,8 +238,11 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
             # Infer schema from the first page (if not already done)
             if page_number == 1:
                 sample_record = {}
-                for record in entity_data:
-                    sample_record.update(record)  # Merge all fields into sample_record
+                if entity_data:  # If data is fetched, use the first record to infer the schema
+                    for record in entity_data:
+                        sample_record.update(record)
+                else:  # If no data is fetched, create an empty table with default columns
+                    sample_record = {"id": 1, "name": "default", "created_at": datetime.now()}  # Example default columns
 
                 # Create the table and get inferred columns
                 logger.info(f"Creating table for entity: {table_name}")
@@ -290,7 +294,6 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
     except Exception as e:
         logger.error(f"Error fetching data for entity {table_name if table_name else entity_name}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
-
 
 @app.post("/fetch-entity-fields")
 async def fetch_entity_fields(entity_name: str, authorization: str = Header(None)):
@@ -354,8 +357,7 @@ def anonymize_field(field_type: str, data: str) -> str:
         # Default case: anonymize the entire field
         return "***"
 
-#logging.basicConfig(level=logging.INFO)
-#logger = logging.getLogger(__name__)
+
 
 def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields: list) -> list:
     logger.info(f"Fetching data from staging for entity: {entity_name}")
@@ -451,7 +453,12 @@ async def get_entity_columns(entity_name: str):
 
 
 def clean_entity_name(name: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9_\- ]", "", name).strip()
+    # Remove unwanted characters except letters, numbers, underscore, hyphen, and spaces
+    cleaned_name = re.sub(r"[^a-zA-Z0-9_\- ]", "", name).strip()
+    # Replace spaces with hyphens to separate words
+    cleaned_name = re.sub(r"\s+", "-", cleaned_name)
+    return cleaned_name
+
 class MatchingRequest(BaseModel):
     selectedFaciliooEntity: str
     selectedCrmEntity: str
