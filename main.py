@@ -365,6 +365,7 @@ def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields
 
     try:
         # Construct and log the query
+        entity_name = table_entity_name(entity_name)
         query = text(f"SELECT * FROM {entity_name}")
         logger.debug(f"Executing query: {query}")
 
@@ -441,6 +442,7 @@ async def stream_progress(entity_name: str):
 async def get_entity_columns(entity_name: str):
     try:
         # Fetch the schema for the entity
+        entity_name = table_entity_name(entity_name)
         metadata = MetaData()
         table = Table(entity_name.lower(), metadata, autoload_with=engine)
         columns = [col.name for col in table.columns]
@@ -450,13 +452,11 @@ async def get_entity_columns(entity_name: str):
         raise HTTPException(status_code=500, detail=f"Error fetching columns for entity {entity_name}: {str(e)}")
     
 
-
-
-def clean_entity_name(name: str) -> str:
-    # Remove unwanted characters except letters, numbers, underscore, hyphen, and spaces
+def table_entity_name(name: str) -> str:
+    # Remove unwanted characters except letters, numbers, underscores, hyphens, and spaces
     cleaned_name = re.sub(r"[^a-zA-Z0-9_\- ]", "", name).strip()
-    # Replace spaces with hyphens to separate words
-    cleaned_name = re.sub(r"\s+", "-", cleaned_name)
+    # Replace spaces and hyphens with underscores
+    cleaned_name = re.sub(r"[\s\-]+", "_", cleaned_name)
     return cleaned_name
 
 class MatchingRequest(BaseModel):
@@ -470,8 +470,8 @@ async def save_matching_columns(request: MatchingRequest, authorization: str = H
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        selectedFaciliooEntity = clean_entity_name(request.selectedFaciliooEntity)
-        selectedCrmEntity = clean_entity_name(request.selectedCrmEntity)
+        selectedFaciliooEntity = table_entity_name(request.selectedFaciliooEntity)
+        selectedCrmEntity = table_entity_name(request.selectedCrmEntity)
         if not selectedFaciliooEntity or not selectedCrmEntity:
             raise HTTPException(status_code=400, detail="Both entities must be provided.")
         entity_pair = f"{selectedFaciliooEntity}-{selectedCrmEntity}"
@@ -542,6 +542,7 @@ async def get_entity_data(entity_name: str, db: Session = Depends(get_db), autho
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
+        entity_name = table_entity_name(entity_name)
         query = text(f"SELECT * FROM {entity_name}")  # Replace with your table naming convention
         result = db.execute(query)
         entity_data = [dict(row) for row in result.mappings()]
@@ -559,8 +560,8 @@ async def get_matching_fields(selectedFaciliooEntity: str, selectedCrmEntity: st
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        selectedFaciliooEntity = clean_entity_name(selectedFaciliooEntity)
-        selectedCrmEntity = clean_entity_name(selectedCrmEntity)
+        selectedFaciliooEntity = table_entity_name(selectedFaciliooEntity)
+        #selectedCrmEntity = table_entity_name(selectedCrmEntity)
         if not selectedFaciliooEntity or not selectedCrmEntity:
             raise HTTPException(status_code=400, detail="Both entities must be provided.")
         entity_pair = f"{selectedFaciliooEntity}-{selectedCrmEntity}"
@@ -1394,7 +1395,7 @@ async def migrate_entity(
     background_tasks: BackgroundTasks,
     authorization: str = Header(None)
 ):
-    selected_facilioo_entity = request.selected_facilioo_entity
+    selected_facilioo_entity = table_entity_name(request.selected_facilioo_entity)
     selected_crm_entity = request.selected_crm_entity
 
     # Fetch matched fields
