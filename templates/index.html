@@ -39,7 +39,7 @@
                     <option value="">-- Select --</option>
                 </select>
                 <button id="fetchEntityBtn" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
-                    <i class="fas fa-download"></i> Fetch
+                    <i class="fas fa-download"></i> Fetch to DB
                 </button>
             </div>
 
@@ -50,7 +50,7 @@
                     <option value="">-- Select --</option>
                 </select>
                 <button id="fetchEntityBtnCRM" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
-                    <i class="fas fa-download"></i> Fetch
+                    <i class="fas fa-download"></i> Show Fields
                 </button>
             </div>
         </div>
@@ -129,21 +129,23 @@
         <!-- Migration Summary Table -->
         <div id="migrationSummary" class="mt-8 max-w-2xl mx-auto" style="display: none;">
             <h3 class="text-xl font-semibold mb-4"><i class="fas fa-table"></i> Migration Summary</h3>
-            <table id="migrationSummaryTable" class="w-full bg-white rounded-lg shadow-md">
-                <thead>
-                    <tr class="bg-gray-100">
-                        <th class="px-4 py-2">Entity</th>
-                        <th class="px-4 py-2">Source Records</th>
-                        <th class="px-4 py-2">Processed Records</th>
-                        <th class="px-4 py-2">Created</th>
-                        <th class="px-4 py-2">Updated</th>
-                        <th class="px-4 py-2">Errors</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Rows will be populated dynamically -->
-                </tbody>
-            </table>
+            <div class="bg-white p-4 rounded-lg shadow-md overflow-x-auto">
+                <table id="migrationSummaryTable" class="w-full">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="px-4 py-2">Entity</th>
+                            <th class="px-4 py-2">Source Records</th>
+                            <th class="px-4 py-2">Processed Records</th>
+                            <th class="px-4 py-2">Created</th>
+                            <th class="px-4 py-2">Updated</th>
+                            <th class="px-4 py-2">Errors</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Rows will be populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Excel Download Link -->
@@ -172,6 +174,8 @@
             let isDropdownChanged = false; // Flag to track dropdown changes
             const saveMatchingBtn = $("#saveMatchingBtn");
             saveMatchingBtn.hide();
+            const migrateEntityBtn = $("#migrateEntityBtn");
+            migrateEntityBtn.hide();
 
             $("#matchedFieldsDropdown").select2({
                 placeholder: "Select matched fields",
@@ -214,8 +218,9 @@
                     selectedCrmEntity,
                     matchedFields: nonEmptyFields
                 };
-                logsContainer.innerHTML += `<p>📤 Sending payload: ${JSON.stringify(payload)}</p>`;
+                logsContainer.innerHTML += `<p>📤 Sending payload: ${JSON.stringify(payload)}</p>`;            
                 autoScrollLogs();            
+
                 try {
                     const response = await fetch("/save-matching-columns", {
                         method: "POST",
@@ -228,10 +233,13 @@
                     const result = await response.json();
                     if (response.ok) {
                         logsContainer.innerHTML += `<p style="color: green;">✅ ${result.message}</p>`;autoScrollLogs();
+                        migrateEntityBtn.show();
                     } else {logsContainer.innerHTML += `<p style="color: red;">❌ Error: ${result.detail}</p>`;autoScrollLogs();
                     }
                     isDropdownChanged = false;
                     saveMatchingBtn.hide();
+                    migrateEntityBtn.show();
+
         
 
                 } catch (error) {
@@ -241,68 +249,97 @@
             });
                         
 
-        });
 
-
-        async function fetchAndDisplayMatchingFields() {
-            const selectedFaciliooEntity = $("#entitySelect").val();
-            const selectedCrmEntity = $("#entitySelectCRM").val();
-            if (!selectedFaciliooEntity || !selectedCrmEntity) {
-                logsContainer.innerHTML = `<strong>Please select both entities to compare.</strong>`;return;}
-            try {
-                $("#logsContainer").show();
-                const response = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
-                    method: "GET",
-                    headers: {"Authorization": `Bearer ${accessToken}`}});
-                const result = await response.json();
-                if (response.ok) {
-                    const matchedFields = result.matched_fields;
-                    if (matchedFields && matchedFields.length > 0) {
-                        let tableHTML = `
-                            <strong>Comparing:</strong> 
-                            <br>Facilioo Entity: <b>${selectedFaciliooEntity}</b> 
-                            <br>CRM Entity: <b>${selectedCrmEntity}</b>
-                            <hr>
-                            <table border="1" cellspacing="0" cellpadding="5" style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr style="background-color: #f2f2f2;">
-                                        <th>Facilioo Entity</th>
-                                        <th>CRM Entity</th>
-                                    </tr>
-                                </thead>
-                                <tbody>`;
-        
-                        // Populate table rows
-                        matchedFields.forEach(match => {
-                            const [faciliooField, crmField] = match.split("-");
-                            tableHTML += `
-                                <tr>
-                                    <td>${faciliooField}</td>
-                                    <td>${crmField}</td>
-                                </tr>`;
-                        });
-        
-                        tableHTML += `</tbody></table>`;
-                        logsContainer.innerHTML = tableHTML;
-                    } else {
-                        logsContainer.innerHTML = `
-                            <strong>Comparing:</strong> 
-                            <br>Facilioo Entity: <b>${selectedFaciliooEntity}</b> 
-                            <br>CRM Entity: <b>${selectedCrmEntity}</b>
-                            <hr>
-                            No matching fields found.
-                        `;
-                    }
-                    autoScrollLogs();
-                } else {
-                    alert(`Error: ${result.detail}`);
+            async function fetchAndDisplayMatchingFields() {
+                const selectedFaciliooEntity = $("#entitySelect").val();
+                const selectedCrmEntity = $("#entitySelectCRM").val();
+                const logsContainer = document.getElementById("logsContainer");
+                const migrateEntityBtn = $("#migrateEntityBtn");
+                const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
+                const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
+            
+                if (!selectedFaciliooEntity || !selectedCrmEntity) {
+                    logsContainer.innerHTML = `<strong>Please select both entities to compare.</strong>`;
+                    return;
                 }
-            } catch (error) {
-                console.error("Error fetching matching fields:", error);
+            
+                try {
+                    $("#logsContainer").show();
+                    const response = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
+                        method: "GET",
+                        headers: { "Authorization": `Bearer ${accessToken}` }
+                    });
+                    const result = await response.json();
+            
+                    if (response.ok) {
+                        const matchedFields = result.matched_fields || [];
+            
+                        if (matchedFields.length > 0) {
+                            // Show the dropdown and populate it with matched fields
+                            matchedFieldsDropdown.innerHTML = ""; // Clear existing options
+                            matchedFields.forEach(match => {
+                                const [faciliooField, crmField] = match.split("-");
+                                const option = document.createElement("option");
+                                option.value = match;
+                                option.textContent = `${faciliooField} - ${crmField}`;
+                                matchedFieldsDropdown.appendChild(option);
+                            });
+                            matchedFieldsDropdownContainer.style.display = "block"; // Show the dropdown container
+            
+                            // Display the table with matched fields
+                            let tableHTML = `
+                                <strong>Comparing:</strong> 
+                                <br>Facilioo Entity: <b>${selectedFaciliooEntity}</b> 
+                                <br>CRM Entity: <b>${selectedCrmEntity}</b>
+                                <hr>
+                                <table border="1" cellspacing="0" cellpadding="5" style="width: 100%; border-collapse: collapse;">
+                                    <thead>
+                                        <tr style="background-color: #f2f2f2;">
+                                            <th>Facilioo Entity</th>
+                                            <th>CRM Entity</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>`;
+            
+                            matchedFields.forEach(match => {
+                                const [faciliooField, crmField] = match.split("-");
+                                tableHTML += `
+                                    <tr>
+                                        <td>${faciliooField}</td>
+                                        <td>${crmField}</td>
+                                    </tr>`;
+                            });
+            
+                            tableHTML += `</tbody></table>`;
+                            logsContainer.innerHTML = tableHTML;
+                            migrateEntityBtn.show();
+                        } else {
+                            // Hide the dropdown and display a message
+                            matchedFieldsDropdownContainer.style.display = "none"; // Hide the dropdown container
+                            logsContainer.innerHTML = `
+                                <strong>Comparing:</strong> 
+                                <br>Facilioo Entity: <b>${selectedFaciliooEntity}</b> 
+                                <br>CRM Entity: <b>${selectedCrmEntity}</b>
+                                <hr>
+                                No matching fields found.
+                            `;
+                            migrateEntityBtn.hide();
+                        }
+            
+                        autoScrollLogs();
+                    } else {
+                        alert(`Error: ${result.detail}`);
+                    }
+                } catch (error) {
+                    console.error("Error fetching matching fields:", error);
+                }
             }
-        }
-        $("#entitySelect, #entitySelectCRM").on("change", fetchAndDisplayMatchingFields);
-               
+            
+            $("#entitySelect, #entitySelectCRM").on("change", fetchAndDisplayMatchingFields);
+
+// do not delete });               
+
+    });
         
 
         document.getElementById("toggleLogs").addEventListener("click", function() {
@@ -310,6 +347,164 @@
             logsContainer.style.display = logsContainer.style.display === "none" ? "block" : "none";
             this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
         });
+
+
+        document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
+            const logsContainer = document.getElementById("logsContainer");
+            logsContainer.innerHTML = "";
+            logsContainer.style.display = "block";
+            resetProgressBars();
+            showLoadingSpinner();
+        
+            try {
+                const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
+                const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
+        
+                // Log start of migration
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
+                //document.getElementById("fetchingMessage").textContent = "Fetching ...";
+
+                const fetchingMessageElement = document.querySelector("#fetchingMessage");
+                if (fetchingMessageElement) {
+                    fetchingMessageElement.textContent = "Fetching ...";
+                } else {
+                    console.error('Fetching message element not found');
+                }
+                document.getElementById("fetchingProgress").style.width = "50%";
+        
+                // Fetch matched fields for the selected entities
+                const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
+                    method: "GET",
+                    headers: {"Authorization": `Bearer ${accessToken}`}
+                });
+        
+                if (!matchedFieldsResponse.ok) {
+                    throw new Error("Failed to fetch matched fields.");
+                }
+        
+                const matchedFieldsData = await matchedFieldsResponse.json();
+                const matchedFields = matchedFieldsData.matched_fields;
+        
+                if (!matchedFields || matchedFields.length === 0) {
+                    throw new Error("No matching fields found for the selected entities.");
+                }
+        
+                // Log matched fields
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved matched fields for migration.</p>`;
+                document.getElementById("fetchingProgress").style.width = "100%";
+                document.getElementById("fetchingMessage").textContent = "Complete";
+        
+                // Fetch entity data from staging
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving data for Facilioo entity: <b>${selectedFaciliooEntity}</b> from staging database...</p>`;
+                const entityDataResponse = await fetch(`/get-entity-data?entity_name=${selectedFaciliooEntity}`, {
+                    method: "GET",
+                    headers: {"Authorization": `Bearer ${accessToken}`}
+                });
+        
+                if (!entityDataResponse.ok) {
+                    throw new Error("Failed to fetch entity data from staging.");
+                }
+        
+                const entityData = await entityDataResponse.json();
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${entityData.length} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
+        
+                // Start migration
+                document.getElementById("migrationMessage").textContent = "Starting migration...";
+                document.getElementById("migrationProgress").style.width = "0%";
+        
+                const response = await fetch("/migrate-entity", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({
+                        selected_facilioo_entity: selectedFaciliooEntity,
+                        selected_crm_entity: selectedCrmEntity
+                    }),
+                });
+        
+                if (!response.ok) {
+                    throw new Error("Migration failed.");
+                }
+        
+                const data = await response.json();
+                const totalRecords = data.total_records;
+                let processedRecords = 0;
+        
+                // Process migration results
+                for (const result of data.results) {
+                    processedRecords++;
+                    const progress = (processedRecords / totalRecords) * 100;
+                    document.getElementById("migrationProgress").style.width = `${progress}%`;
+                    document.getElementById("migrationMessage").textContent = `Migrating record ${result.record_id}...`;
+        
+                    logsContainer.innerHTML += `
+                        <p>
+                            <strong>Record ID:</strong> ${result.record_id} <br>
+                            <strong>Staging Status:</strong> ${result.staging_status} <br>
+                            <strong>CRM Status:</strong> ${result.crm_status} <br>
+                            <strong>Action:</strong> ${result.action || "none"} <br>
+                            ${result.error ? `<strong>Error:</strong> ${result.error}` : ""}
+                        </p>
+                    `;
+                    autoScrollLogs();
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+                }
+        
+                // Log migration summary
+                logsContainer.innerHTML += `
+                    <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
+                    <p>Total Records: ${data.total_records}</p>
+                    <p>Successfully Migrated: ${data.success_count}</p>
+                    <p>Updated: ${data.update_count}</p>
+                    <p>Inserted: ${data.insert_count}</p>
+                    <p>Failed: ${data.error_count}</p>
+                `;
+                autoScrollLogs();
+        
+                // Update migration summary table
+                const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
+                summaryTable.innerHTML = `
+                    <tr>
+                        <td class="px-4 py-2">${data.entity_name}</td>
+                        <td class="px-4 py-2">${data.total_records}</td>
+                        <td class="px-4 py-2">${data.success_count + data.error_count}</td>
+                        <td class="px-4 py-2">${data.insert_count}</td>
+                        <td class="px-4 py-2">${data.update_count}</td>
+                        <td class="px-4 py-2">${data.error_count}</td>
+                    </tr>
+                `;
+        
+                // Show the migration summary table
+                document.getElementById("migrationSummary").style.display = "block";
+        
+                // Handle Excel download link
+                if (data.excel_file_url) {
+                    const excelLink = document.getElementById("excelLink");
+                    excelLink.href = data.excel_file_url;
+                    document.getElementById("excelDownload").style.display = "block";
+                }
+        
+                // Update migration status message
+                if (data.error_count === 0) {
+                    document.getElementById("migrationMessage").textContent = "Complete";
+                } else {
+                    document.getElementById("migrationMessage").textContent = "Partial Success";
+                }
+        
+                setTimeout(resetProgressBars, 1000);
+            } catch (error) {
+                console.error("Error:", error);
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration: ${error.message}</p>`;
+                document.getElementById("fetchingMessage").textContent = "Fetching: Error";
+                document.getElementById("migrationMessage").textContent = "Migration: Error";
+            } finally {
+                hideLoadingSpinner();
+            }
+        });
+
+
 
 
         function autoScrollLogs() {
@@ -383,7 +578,25 @@
         }
     }
 
-
+        // Fetch and populate Facilioo entities dropdown
+        async function populateEntityDropdown() {
+            try {
+                const response = await fetch("/facilioo-entities");
+                if (!response.ok) {throw new Error("Failed to fetch entities list");}
+                const entities = await response.json();
+                const entitySelect = document.getElementById("entitySelect");
+                entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
+                entities.forEach(entity => {
+                    const option = document.createElement("option");
+                    option.value = entity;
+                    option.textContent = entity.replace(/-/g, " "); 
+                    entitySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Error fetching entities list:", error);
+                alert("Failed to fetch Facilioo entities. Please try again.");
+            }
+        }
 
     document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
         const faciliooEntitySelect = document.getElementById("entitySelect");
@@ -400,7 +613,7 @@
         logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
         autoScrollLogs();
         logsContainer.style.display = "block";
-    
+        showLoadingSpinner();
         try {
             // Fetch entity fields and matched fields
             const [faciliooResponse, crmResponse, matchedFieldsResponse] = await Promise.all([
@@ -526,8 +739,13 @@
                     matchedFieldsDropdown.appendChild(option);
                 });
     
-                // Show the dropdown container
-                document.getElementById("matchedFieldsDropdownContainer").style.display = "block";
+                // Show the dropdown container only if there are matched fields
+                const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
+                if (matchedFields.length > 0) {
+                    matchedFieldsDropdownContainer.style.display = "block";
+                } else {
+                    matchedFieldsDropdownContainer.style.display = "none";
+                }
             } else {
                 logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch entity fields.</p>`;
                 autoScrollLogs();
@@ -537,168 +755,16 @@
             logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while matching entities.</p>`;
             autoScrollLogs();
         }
-    });
-        document.addEventListener("DOMContentLoaded", () => {
+        hideLoadingSpinner();
+    });        
+    
+    
+    document.addEventListener("DOMContentLoaded", () => {
             if (accessToken) {fetchAndPopulateCrmEntities();}
         });
 
 
         
-
-        document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
-            const logsContainer = document.getElementById("logsContainer");
-            logsContainer.innerHTML = "";
-            logsContainer.style.display = "block";
-            resetProgressBars();
-            showLoadingSpinner();
-        
-            try {
-                const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
-                const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
-        
-                // Log start of migration
-                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
-                //document.getElementById("fetchingMessage").textContent = "Fetching ...";
-
-                const fetchingMessageElement = document.querySelector("#fetchingMessage");
-                if (fetchingMessageElement) {
-                    fetchingMessageElement.textContent = "Fetching ...";
-                } else {
-                    console.error('Fetching message element not found');
-                }
-                document.getElementById("fetchingProgress").style.width = "50%";
-        
-                // Fetch matched fields for the selected entities
-                const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
-                    method: "GET",
-                    headers: {"Authorization": `Bearer ${accessToken}`}
-                });
-        
-                if (!matchedFieldsResponse.ok) {
-                    throw new Error("Failed to fetch matched fields.");
-                }
-        
-                const matchedFieldsData = await matchedFieldsResponse.json();
-                const matchedFields = matchedFieldsData.matched_fields;
-        
-                if (!matchedFields || matchedFields.length === 0) {
-                    throw new Error("No matching fields found for the selected entities.");
-                }
-        
-                // Log matched fields
-                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved matched fields for migration.</p>`;
-                document.getElementById("fetchingProgress").style.width = "100%";
-                document.getElementById("fetchingMessage").textContent = "Complete";
-        
-                // Fetch entity data from staging
-                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving data for Facilioo entity: <b>${selectedFaciliooEntity}</b> from staging database...</p>`;
-                const entityDataResponse = await fetch(`/get-entity-data?entity_name=${selectedFaciliooEntity}`, {
-                    method: "GET",
-                    headers: {"Authorization": `Bearer ${accessToken}`}
-                });
-        
-                if (!entityDataResponse.ok) {
-                    throw new Error("Failed to fetch entity data from staging.");
-                }
-        
-                const entityData = await entityDataResponse.json();
-                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${entityData.length} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
-        
-                // Start migration
-                document.getElementById("migrationMessage").textContent = "Starting migration...";
-                document.getElementById("migrationProgress").style.width = "0%";
-        
-                const response = await fetch("/migrate-entity", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${accessToken}`
-                    },
-                                    body: JSON.stringify({
-                        selected_facilioo_entity: selectedFaciliooEntity,
-                        selected_crm_entity: selectedCrmEntity
-                    }),
-                });
-        
-                if (!response.ok) {
-                    throw new Error("Migration failed.");
-                }
-        
-                const data = await response.json();
-                const totalRecords = data.total_records;
-                let processedRecords = 0;
-        
-                // Process migration results
-                for (const result of data.results) {
-                    processedRecords++;
-                    const progress = (processedRecords / totalRecords) * 100;
-                    document.getElementById("migrationProgress").style.width = `${progress}%`;
-                    document.getElementById("migrationMessage").textContent = `Migrating record ${result.record_id}...`;
-        
-                    logsContainer.innerHTML += `
-                        <p>
-                            <strong>Record ID:</strong> ${result.record_id} <br>
-                            <strong>Staging Status:</strong> ${result.staging_status} <br>
-                            <strong>CRM Status:</strong> ${result.crm_status} <br>
-                            <strong>Action:</strong> ${result.action || "none"} <br>
-                            ${result.error ? `<strong>Error:</strong> ${result.error}` : ""}
-                        </p>
-                    `;
-                    autoScrollLogs();
-                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
-                }
-        
-                // Log migration summary
-                logsContainer.innerHTML += `
-                    <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
-                    <p>Total Records: ${data.total_records}</p>
-                    <p>Successfully Migrated: ${data.success_count}</p>
-                    <p>Updated: ${data.update_count}</p>
-                    <p>Inserted: ${data.insert_count}</p>
-                    <p>Failed: ${data.error_count}</p>
-                `;
-                autoScrollLogs();
-        
-                // Update migration summary table
-                const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
-                summaryTable.innerHTML = `
-                    <tr>
-                        <td class="px-4 py-2">${data.entity_name}</td>
-                        <td class="px-4 py-2">${data.total_records}</td>
-                        <td class="px-4 py-2">${data.success_count + data.error_count}</td>
-                        <td class="px-4 py-2">${data.insert_count}</td>
-                        <td class="px-4 py-2">${data.update_count}</td>
-                        <td class="px-4 py-2">${data.error_count}</td>
-                    </tr>
-                `;
-        
-                // Show the migration summary table
-                document.getElementById("migrationSummary").style.display = "block";
-        
-                // Handle Excel download link
-                if (data.excel_file_url) {
-                    const excelLink = document.getElementById("excelLink");
-                    excelLink.href = data.excel_file_url;
-                    document.getElementById("excelDownload").style.display = "block";
-                }
-        
-                // Update migration status message
-                if (data.error_count === 0) {
-                    document.getElementById("migrationMessage").textContent = "Complete";
-                } else {
-                    document.getElementById("migrationMessage").textContent = "Partial Success";
-                }
-        
-                setTimeout(resetProgressBars, 1000);
-            } catch (error) {
-                console.error("Error:", error);
-                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration: ${error.message}</p>`;
-                document.getElementById("fetchingMessage").textContent = "Fetching: Error";
-                document.getElementById("migrationMessage").textContent = "Migration: Error";
-            } finally {
-                hideLoadingSpinner();
-            }
-        });
 
 
 
@@ -904,25 +970,6 @@
             } finally {hideLoadingSpinner();}
         });
 
-        // Fetch and populate Facilioo entities dropdown
-        async function populateEntityDropdown() {
-            try {
-                const response = await fetch("/facilioo-entities");
-                if (!response.ok) {throw new Error("Failed to fetch entities list");}
-                const entities = await response.json();
-                const entitySelect = document.getElementById("entitySelect");
-                entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
-                entities.forEach(entity => {
-                    const option = document.createElement("option");
-                    option.value = entity;
-                    option.textContent = entity.replace(/-/g, " "); 
-                    entitySelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error("Error fetching entities list:", error);
-                alert("Failed to fetch Facilioo entities. Please try again.");
-            }
-        }
 
         async function fetchTotalRows(entityName) {
             try {
