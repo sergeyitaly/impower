@@ -527,8 +527,7 @@
         
                 // Log start of migration
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
-                //document.getElementById("fetchingMessage").textContent = "Fetching ...";
-
+                
                 const fetchingMessageElement = document.querySelector("#fetchingMessage");
                 if (fetchingMessageElement) {
                     fetchingMessageElement.textContent = "Fetching ...";
@@ -571,7 +570,11 @@
                 }
         
                 const entityData = await entityDataResponse.json();
-                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${entityData.length} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
+        
+                // Check the structure of entityData to find the number of records
+                const totalRecords = entityData.total_records || entityData.data?.length || entityData.length || 0;
+        
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${totalRecords} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
         
                 // Start migration
                 document.getElementById("migrationMessage").textContent = "Starting migration...";
@@ -594,18 +597,21 @@
                 }
         
                 const data = await response.json();
-                const totalRecords = data.total_records;
+                const totalMigratedRecords = data.total_records;
                 let processedRecords = 0;
         
                 // Process migration results
                 for (const result of data.results) {
                     processedRecords++;
-                    const progress = (processedRecords / totalRecords) * 100;
+                    const progress = (processedRecords / totalMigratedRecords) * 100;
                     document.getElementById("migrationProgress").style.width = `${progress}%`;
                     document.getElementById("migrationMessage").textContent = `Migrating record ${result.record_id}...`;
         
+                    // Log the current record being processed
                     logsContainer.innerHTML += `
                         <p>
+                            <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
+                            <br>
                             <strong>Record ID:</strong> ${result.record_id} <br>
                             <strong>Staging Status:</strong> ${result.staging_status} <br>
                             <strong>CRM Status:</strong> ${result.crm_status} <br>
@@ -620,7 +626,7 @@
                 // Log migration summary
                 logsContainer.innerHTML += `
                     <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
-                    <p>Total Records: ${data.total_records}</p>
+                    <p>Total Records: ${totalMigratedRecords}</p>
                     <p>Successfully Migrated: ${data.success_count}</p>
                     <p>Updated: ${data.update_count}</p>
                     <p>Inserted: ${data.insert_count}</p>
@@ -633,7 +639,7 @@
                 summaryTable.innerHTML = `
                     <tr>
                         <td class="px-4 py-2">${data.entity_name}</td>
-                        <td class="px-4 py-2">${data.total_records}</td>
+                        <td class="px-4 py-2">${totalMigratedRecords}</td>
                         <td class="px-4 py-2">${data.success_count + data.error_count}</td>
                         <td class="px-4 py-2">${data.insert_count}</td>
                         <td class="px-4 py-2">${data.update_count}</td>
@@ -668,7 +674,6 @@
                 hideLoadingSpinner();
             }
         });
-
 
 
 
