@@ -35,8 +35,15 @@ import uuid
 
 def validate_and_convert_guid(value):
     try:
-        return str(uuid.UUID(str(value)))
-    except (ValueError, TypeError):
+        # If the value is already a valid GUID, return it
+        if isinstance(value, str) and "-" in value:
+            return str(uuid.UUID(value))
+        # If the value is an integer, convert it to a GUID-like string
+        elif isinstance(value, int):
+            return str(uuid.UUID(int=value))
+        else:
+            return None
+    except (ValueError, AttributeError):
         return None
 
 logging.basicConfig(level=logging.INFO)
@@ -1104,7 +1111,7 @@ def extract_record_id_from_error(response):
         logger.error(f"Error extracting record ID from error response: {str(e)}")
         raise ValueError("Failed to parse the error response.")
     
-
+    
 def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str) -> Dict:
     # If matched_fields is a JSON string, parse it to a list
     if isinstance(matched_fields, str):
@@ -1126,74 +1133,32 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
         
         # Check if the facilioo_field exists in the entity data
         if facilioo_field in entity_data:
-            # Ensure that the value is not the field name itself
-            if entity_data[facilioo_field] == facilioo_field:
-                logger.warning(f"Source field '{facilioo_field}' contains the field name instead of data. Skipping field.")
-                failed_fields.append(facilioo_field)  # Add to failed fields
+            field_value = entity_data[facilioo_field]
+            
+            # Handle GUID fields (e.g., attributeid)
+            if crm_field.lower().endswith('id') and crm_field.lower() != 'id':
+                guid_value = validate_and_convert_guid(field_value)
+                if guid_value:
+                    crm_data[crm_field] = guid_value
+                else:
+                    logger.warning(f"Invalid GUID value for field '{crm_field}'. Skipping field.")
+                    failed_fields.append(facilioo_field)
             else:
-                # Determine the field type based on the CRM field name
-                if 'email' in crm_field.lower():
-                    field_type = 'email'
-                elif 'name' in crm_field.lower() and 'last' not in crm_field.lower():
-                    field_type = 'name'
-                elif 'lastname' in crm_field.lower():
-                    field_type = 'lastname'
-                elif 'phone' in crm_field.lower():
-                    field_type = 'phone'
-                else:
-                    field_type = None  # Default to no anonymization
-
-                # Anonymize the data if a field type is determined
-                if field_type:
-                    anonymized_value = anonymize_data(entity_data[facilioo_field], field_type)
-                    if anonymized_value is None:
-                        logger.warning(f"Failed to anonymize field '{facilioo_field}'. Skipping field.")
-                        failed_fields.append(facilioo_field)  # Add to failed fields
-                    else:
-                        crm_data[crm_field] = anonymized_value
-                else:
-                    # Handle GUID fields (e.g., contactid, accountid)
-                    if crm_field.lower().endswith('id') and crm_field.lower() != 'id':
-                        # Convert the value to a valid GUID
-                        guid_value = validate_and_convert_guid(entity_data[facilioo_field])
-                        if guid_value:
-                            crm_data[crm_field] = guid_value
-                        else:
-                            logger.warning(f"Invalid GUID value for field '{crm_field}'. Skipping field.")
-                            failed_fields.append(facilioo_field)  # Add to failed fields
-                    else:
-                        crm_data[crm_field] = entity_data[facilioo_field]  # No anonymization
+                crm_data[crm_field] = field_value  # No GUID conversion needed
         else:
             logger.warning(f"Facilioo field {facilioo_field} not found in entity_data. Skipping field.")
-            failed_fields.append(facilioo_field)  # Add to failed fields
+            failed_fields.append(facilioo_field)
     
     logger.info(f"CRM Data being sent: {crm_data}")
 
     try:
-        # Step 1: Use the first CRM field as the unique identifier for Upsert
+        # Step 1: Use the unique_identifier_field to implement Upsert
         unique_identifier_field = matched_fields[0].split('-')[1]  # First CRM field
         unique_identifier_value = crm_data.get(unique_identifier_field)
 
         if unique_identifier_value:
-            # Anonymize the unique identifier value before querying the CRM
-            if 'email' in unique_identifier_field.lower():
-                field_type = 'email'
-            elif 'name' in unique_identifier_field.lower() and 'last' not in unique_identifier_field.lower():
-                field_type = 'name'
-            elif 'lastname' in unique_identifier_field.lower():
-                field_type = 'lastname'
-            elif 'phone' in unique_identifier_field.lower():
-                field_type = 'phone'
-            else:
-                field_type = None  # Default to no anonymization
-
-            if field_type:
-                anonymized_unique_identifier_value = anonymize_data(entity_data[matched_fields[0].split('-')[0]], field_type)
-            else:
-                anonymized_unique_identifier_value = unique_identifier_value  # No anonymization
-
             # Construct the query URL to check for existing records
-            query_url = f"{crm_url}?$filter={unique_identifier_field} eq '{anonymized_unique_identifier_value}'"
+            query_url = f"{crm_url}?$filter={unique_identifier_field} eq '{unique_identifier_value}'"
             query_response = requests.get(query_url, headers={
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json"
@@ -1202,19 +1167,25 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             if query_response.status_code == 200:
                 existing_records = query_response.json().get("value", [])
                 if existing_records:
+                    # Extract the record_id (primary key) from the existing record
+                    record_id = existing_records[0].get(f"{selected_crm_entity.lower()}id")  # e.g., "attributeid"
+
+                    if not record_id:
+                        logger.error(f"Primary key field not found in existing records.")
+                        return {"success": False, "action": "update_failed", "failed_fields": failed_fields}
+
                     # Record exists, perform an update
-                    existing_record_id = existing_records[0].get("contactid")  # Use 'contactid' for Dynamics CRM
-                    update_url = f"{crm_url}({existing_record_id})"
+                    update_url = f"{crm_url}({record_id})"
                     update_response = requests.patch(update_url, headers={
                         "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json"
                     }, data=json.dumps(crm_data))
 
                     if update_response.status_code in [200, 204]:
-                        logger.info(f"Successfully updated record {existing_record_id} in CRM.")
+                        logger.info(f"Successfully updated record {record_id} in CRM.")
                         return {"success": True, "action": "updated", "failed_fields": failed_fields}
                     else:
-                        logger.error(f"Failed to update record {existing_record_id} in CRM. Status code: {update_response.status_code}, Response: {update_response.text}")
+                        logger.error(f"Failed to update record {record_id} in CRM. Status code: {update_response.status_code}, Response: {update_response.text}")
                         return {"success": False, "action": "update_failed", "failed_fields": failed_fields}
 
         # Step 2: If the record does not exist, perform an insert
@@ -1227,14 +1198,18 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             logger.info(f"Successfully inserted new record into CRM. Response: {create_response.text}")
             return {"success": True, "action": "inserted", "failed_fields": failed_fields}
         else:
-            logger.error(f"Failed to insert or update record in CRM. Status code: {create_response.status_code}, Response: {create_response.text}")
-            return {"success": False, "action": "creation_failed", "failed_fields": failed_fields}
+            # Handle unsupported entities
+            if "does not support entities of type" in create_response.text:
+                logger.warning(f"The 'Create' method does not support entities of type '{selected_crm_entity}'. Skipping entity.")
+                return {"success": False, "action": "unsupported_entity", "error": "Entity not supported for Create operation", "failed_fields": failed_fields}
+            else:
+                logger.error(f"Failed to insert or update record in CRM. Status code: {create_response.status_code}, Response: {create_response.text}")
+                return {"success": False, "action": "creation_failed", "failed_fields": failed_fields}
 
     except Exception as e:
         logger.error(f"An error occurred while migrating entity data to CRM: {str(e)}")
         return {"success": False, "action": "error", "error": str(e), "failed_fields": failed_fields}
-    
-
+        
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
     crm_url = f"{CRM_URL}/contacts"
