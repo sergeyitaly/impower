@@ -33,19 +33,6 @@ import re
 from sqlalchemy.exc import ProgrammingError
 import uuid
 
-def validate_and_convert_guid(value):
-    try:
-        # If the value is already a valid GUID, return it
-        if isinstance(value, str) and "-" in value:
-            return str(uuid.UUID(value))
-        # If the value is an integer, convert it to a GUID-like string
-        elif isinstance(value, int):
-            return str(uuid.UUID(int=value))
-        else:
-            return None
-    except (ValueError, AttributeError):
-        return None
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # Load environment variables
@@ -70,6 +57,12 @@ RESOURCE = os.getenv("RESOURCE")
 
 # FastAPI App Setup
 app = FastAPI()
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # Configure Jinja2 template engine
 templates = Jinja2Templates(directory="templates")
@@ -202,6 +195,7 @@ def create_table_for_entity(entity_name: str, sample_record: dict):
         logger.error(f"Error creating table for entity {entity_name.lower()}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
 
+
 def fetch_and_save_entity_data(access_token: str, entity_name: str):
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -302,6 +296,38 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
         logger.error(f"Error fetching data for entity {table_name if table_name else entity_name}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
 
+    
+class ExportRequest(BaseModel):
+    entity_name: str
+
+@app.post("/fetch-and-export/")
+def fetch_and_export_entity_data(
+    request: ExportRequest,  # Use the Pydantic model for request validation
+    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks = None,
+):
+    try:
+        entity_name = table_entity_name(request.entity_name)
+        logger.info(f"Entity name: {entity_name}")
+        data_to_export = fetch_all_entity_data_from_staging(db, entity_name)
+        if not data_to_export:
+            raise HTTPException(status_code=404, detail="No data found to export.")
+
+        # Export data to Excel
+        excel_file_path = export_all_entity_to_excel(data_to_export, entity_name)
+        background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
+        logger.info(f"Data exported to Excel file: {excel_file_path}")
+
+        return {
+            "success": True,
+            "columns": list(data_to_export[0].keys()) if data_to_export else [],
+            "total_records": len(data_to_export),
+            "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to export data to Excel: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
+
 @app.post("/fetch-entity-fields")
 async def fetch_entity_fields(entity_name: str, authorization: str = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -365,6 +391,33 @@ def anonymize_field(field_type: str, data: str) -> str:
         return "***"
 
 
+def fetch_all_entity_data_from_staging(db: Session, entity_name: str) -> list:
+    logger.info(f"Fetching all data from staging for entity: {entity_name}")
+
+    try:
+        # Construct and log the query
+        entity_name = table_entity_name(entity_name)
+        query = text(f"SELECT * FROM {entity_name}")
+        logger.debug(f"Executing query: {query}")
+
+        # Execute the query
+        result = db.execute(query)
+        column_names = result.keys()  # Get column names from the query result
+        records = [dict(zip(column_names, row)) for row in result.fetchall()]  # Convert tuples to dictionaries
+        
+        logger.info(f"Retrieved {len(records)} records for entity: {entity_name}")
+        logger.debug(f"Sample record: {records[0] if records else 'No records found'}")  # Debug log
+
+        if not records:
+            logger.warning(f"No records found for entity: {entity_name}")
+            return []
+
+        return records  # Return all records as-is
+    
+    except Exception as e:
+        logger.error(f"Error fetching data for entity {entity_name}: {e}", exc_info=True)
+        return []
+
 
 def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields: list) -> list:
     logger.info(f"Fetching data from staging for entity: {entity_name}")
@@ -410,6 +463,7 @@ def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields
     except Exception as e:
         logger.error(f"Error fetching data for entity {entity_name}: {e}", exc_info=True)
         return []    
+
 
 @app.get("/get-total-rows")
 async def get_total_rows(entity_name: str):
@@ -536,15 +590,6 @@ async def save_matching_columns(request: MatchingRequest, authorization: str = H
     finally:
         db.close()
         
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-
 @app.get("/get-entity-data")
 async def get_entity_data(entity_name: str, db: Session = Depends(get_db), authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -654,190 +699,6 @@ async def refresh_token(refresh_token: str):
     except httpx.RequestError as e:
         logger.error(f"HTTP request error: {str(e)}")
         raise HTTPException(status_code=500, detail="Token refresh service unavailable")
-
-
-
-def fetch_users(access_token: str, offset: int, limit: int):
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",  # Replace with the required API version
-        "Accept-Language": "en-DE",  # Replace with the desired language
-    }
-
-    try:
-        # Fetch users from the external API
-        response = requests.get(
-            f"{API_URL}/api/accounts",
-            headers=headers,
-            params={
-                "PageSize": limit,
-                "PageNumber": offset // limit + 1,  # Calculate page number from offset
-                "SortByAttributeName": "firstName",  # Sort by first name (adjust as needed)
-                "AscendingOrder": True,  # Sort in ascending order (adjust as needed)
-            },
-        )
-
-        # Log the full response for debugging
-        logger.info(f"API response status: {response.status_code}")
-        logger.info(f"API response text: {response.text}")
-
-        if response.status_code == 200:
-            accounts_data = response.json()
-
-            # Log the raw API response for debugging
-            logger.info(f"Raw API response for accounts: {accounts_data}")
-
-            # Handle case where the API returns an empty response or invalid structure
-            if not accounts_data or not isinstance(accounts_data, dict) or "items" not in accounts_data:
-                logger.warning(f"No accounts found or invalid response structure")
-                return []
-
-            # Extract required fields for each account
-            users = []
-            for account in accounts_data["items"]:
-                user = {
-                    "id": account.get("id"),
-                    "name": account.get('firstName'), 
-                    "lastname": account.get('lastName'),
-                    "email": account.get("email"),
-                    "phone": account.get("phoneNumber")
-                }
-                users.append(user)
-
-            # Log the extracted user data for debugging
-            logger.info(f"Extracted user data: {users}")
-            return users
-
-        elif response.status_code == 401:
-            logger.warning(f"Unauthorized: {response.text}")
-            raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing access token")
-        elif response.status_code == 404:
-            logger.warning(f"No accounts found")
-            return []  # No accounts exist
-        else:
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"Failed to fetch accounts: {response.text}",
-            )
-
-    except Exception as e:
-        logger.error(f"Error fetching accounts: {str(e)}")
-        return []  # Return an empty list in case of errors    
-
-@app.post("/fetch-and-save-users")
-async def fetch_and_save_users(background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    access_token = authorization.split("Bearer ")[1]
-    logger.info(f"Access token received: {access_token}")  # Debugging
-
-    try:
-        users = fetch_all_accounts(access_token, batch_size=25)
-        logger.info(f"Fetched {len(users)} users")  # Debugging
-        if not users:
-            raise HTTPException(status_code=404, detail="No users found")
-        save_accounts_to_staging(users)
-        background_tasks.add_task(save_accounts_to_staging, users)
-        return {"success": True, "message": f"Users fetched and saved successfully. Total users: {len(users)}"}
-    except HTTPException as e:
-        raise e  # Re-raise HTTPException to return the correct status code
-    except Exception as e:
-        logger.error(f"Error fetching and saving users: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching and saving users: {str(e)}")
-    
-    
-def save_accounts_to_staging(accounts: list):
-    db = SessionLocal()
-    try:
-        for account in accounts:
-            if not isinstance(account, dict) or not account.get("id"):
-                logger.error(f"Invalid account data: {account}")
-                continue
-
-            # Handle null values for required fields
-            name = account.get("firstName") or "N/A"  # Default value for name
-            lastname = account.get("lastName") or "N/A"  # Default value for lastname
-            email = account.get("email") or "N/A"  # Default value for email
-            phone = account.get("phoneNumber") or "N/A"  # Default value for phone
-
-            # Create the User object with default values for null fields
-            db_account = User(
-                id=account.get("id"),
-                name=name,
-                lastname=lastname,
-                email=email,
-                phone=phone,
-            )
-            db.merge(db_account)
-        db.commit()
-        logger.info(f"Successfully stored {len(accounts)} accounts in staging DB")
-    except Exception as e:
-        logger.error(f"Error saving accounts: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-def fetch_account_by_id(account_id: int, access_token: str):
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
-    }
-    
-    try:
-        response = requests.get(f"{API_URL}/api/accounts/{account_id}", headers=headers)
-        if response.status_code == 200:
-            return response.json()
-        elif response.status_code == 404:
-            logger.warning(f"Account {account_id} not found")
-            return None
-        else:
-            logger.error(f"Failed to fetch account {account_id}: {response.text}")
-            return None
-    except Exception as e:
-        logger.error(f"Error fetching account {account_id}: {str(e)}")
-        return None
-
-def fetch_accounts(access_token: str, page_size: int, page_number: int):
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
-    }
-    params = {
-        "PageSize": page_size,
-        "PageNumber": page_number,
-    }
-    
-    try:
-        response = requests.get(f"{API_URL}/api/accounts", headers=headers, params=params)
-        if response.status_code == 200:
-            return response.json().get("items", [])
-        elif response.status_code == 401:
-            logger.warning("Unauthorized: Invalid or missing access token")
-        else:
-            logger.error(f"Failed to fetch accounts: {response.text}")
-    except Exception as e:
-        logger.error(f"Error fetching accounts: {str(e)}")
-    return []
-
-def fetch_all_accounts(access_token: str, batch_size: int = 20):
-    limit: int = 1000
-    accounts = []
-    page_number = 1
-    
-    while len(accounts) < limit:
-        batch = fetch_accounts(access_token, batch_size, page_number)
-        if not batch:
-            break
-        accounts.extend(batch)
-        if len(accounts) >= limit:
-            break
-        page_number += 1
-    
-    return accounts[:limit]
 
 
 @app.get("/api/crm-contacts-url")
@@ -1111,7 +972,50 @@ def extract_record_id_from_error(response):
         logger.error(f"Error extracting record ID from error response: {str(e)}")
         raise ValueError("Failed to parse the error response.")
     
+
+
+def validate_and_convert_guid(value):
+    try:
+        if isinstance(value, str):
+            if len(value) == 36 and '-' in value:
+                return str(uuid.UUID(value))  # Validate and return as-is
+            elif len(value) == 32 and all(c in '0123456789abcdefABCDEF' for c in value):
+                return str(uuid.UUID(value))
+            else:
+                return None  # Invalid format
+        elif isinstance(value, int):
+            namespace = uuid.NAMESPACE_OID  # Use a fixed namespace for consistency
+            return str(uuid.uuid5(namespace, str(value)))
+        else:
+            return None  # Invalid type
+    except (ValueError, AttributeError, TypeError):
+        return None
     
+
+def anonymize_data(data: str, field_type: str) -> str:
+    if not data:
+        return data
+
+    if field_type == 'name':
+        # Show the first 2 characters and anonymize the rest
+        return data[:2] + "***" if len(data) > 2 else data + "***"
+    
+    elif field_type == 'lastname':
+        # Show the last 2 characters and anonymize the rest
+        return "***" + data[-2:] if len(data) > 2 else "***" + data
+    
+    elif field_type == 'email':
+        # Show the first 3 characters of the local part and the domain
+        local, domain = data.split('@') if '@' in data else (data, "")
+        return local[:3] + "***@" + domain if domain else local[:3] + "***"
+    
+    elif field_type == 'phone':
+        # Show the first 4 characters and anonymize the rest
+        return data[:4] + "****" if len(data) > 4 else data + "****"
+
+    return data
+
+
 def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str) -> Dict:
     # If matched_fields is a JSON string, parse it to a list
     if isinstance(matched_fields, str):
@@ -1144,7 +1048,12 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
                     logger.warning(f"Invalid GUID value for field '{crm_field}'. Skipping field.")
                     failed_fields.append(facilioo_field)
             else:
-                crm_data[crm_field] = field_value  # No GUID conversion needed
+                # Anonymize sensitive data based on field type
+                if crm_field.lower() in ['name', 'lastname', 'email', 'phone']:
+                    anonymized_value = anonymize_data(str(field_value), crm_field.lower())
+                    crm_data[crm_field] = anonymized_value
+                else:
+                    crm_data[crm_field] = field_value  # No anonymization needed
         else:
             logger.warning(f"Facilioo field {facilioo_field} not found in entity_data. Skipping field.")
             failed_fields.append(facilioo_field)
@@ -1209,7 +1118,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
     except Exception as e:
         logger.error(f"An error occurred while migrating entity data to CRM: {str(e)}")
         return {"success": False, "action": "error", "error": str(e), "failed_fields": failed_fields}
-        
+            
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
     crm_url = f"{CRM_URL}/contacts"
@@ -1277,27 +1186,6 @@ def migrate_to_crm(user_data: dict):
         logger.error(f"An error occurred while migrating user data to CRM: {str(e)}")
         return {"success": False, "action": "error", "error": str(e)}
     
-
-def export_to_excel(data: list, entity_name: str) -> str:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = entity_name
-    if data:
-        headers = list(data[0].keys())
-        ws.append(headers)
-    for row in data:
-        anonymized_row = {
-            "id": row["id"],
-            "name": anonymize_data(row["name"], "name"),
-            "lastname": anonymize_data(row["lastname"], "lastname"),
-            "email": anonymize_data(row["email"], "email"),
-            "phone": anonymize_data(row["phone"], "phone"),
-        }
-        ws.append(list(anonymized_row.values()))
-    file_path = f"{entity_name}_export.xlsx"
-    wb.save(file_path)
-    return file_path
-
 def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -> str:
     from openpyxl import Workbook
     wb = Workbook()
@@ -1305,7 +1193,6 @@ def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -
     ws.title = entity_name
     crm_fields = [field_pair.split('-')[1] for field_pair in matched_fields]
     ws.append(crm_fields)
-    # Iterate through the data and anonymize based on matched_fields
     for record in data:
         anonymized_row = {}
         for field_pair in matched_fields:
@@ -1321,28 +1208,48 @@ def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -
                     field_type = 'lastname'
                 elif 'phone' in crm_field.lower():
                     field_type = 'phone'
-
-                # Anonymize data based on the field type
                 value = record[facilioo_field]
                 if field_type:
                     anonymized_row[crm_field] = anonymize_data(value, field_type)
                 else:
                     anonymized_row[crm_field] = value  # No anonymization
             else:
-                # If the field is missing in the row, add it as None
                 anonymized_row[crm_field] = None
-
-        # Append the anonymized row to the worksheet
         ws.append([anonymized_row.get(crm_field, None) for crm_field in crm_fields])
-
-    # Define the file path
     file_path = f"{entity_name}_export.xlsx"
-
-    # Save the workbook
     wb.save(file_path)
-
     return file_path
 
+
+
+def export_all_entity_to_excel(data: list, entity_name: str) -> str:
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = entity_name
+    if data:
+        headers = list(data[0].keys())  # Get all field names from the first record
+        ws.append(headers)
+    for record in data:
+        anonymized_row = {}
+        for field_name, value in record.items():
+            field_type = None
+            if 'email' in field_name.lower():
+                field_type = 'email'
+            elif 'name' in field_name.lower() and 'last' not in field_name.lower():
+                field_type = 'name'
+            elif 'lastname' in field_name.lower():
+                field_type = 'lastname'
+            elif 'phone' in field_name.lower():
+                field_type = 'phone'
+            if field_type:
+                anonymized_row[field_name] = anonymize_data(value, field_type)
+            else:
+                anonymized_row[field_name] = value  # No anonymization
+        ws.append([anonymized_row.get(header) for header in headers])
+    file_path = f"{entity_name}_export.xlsx"
+    wb.save(file_path)
+    return file_path
 
 def delete_file_after_delay(file_path: str, delay: int = 60):
     time.sleep(delay)
@@ -1464,115 +1371,6 @@ async def migrate_entity(
         "entity_name": selected_facilioo_entity,
         "results": results,
         "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
-    }
-
-@app.post("/migrate", response_model=MigrateResponse)
-async def migrate_users(request: MigrateRequest, background_tasks: BackgroundTasks):
-    total_records = len(request.user_ids)
-    success_count = 0
-    error_count = 0
-    update_count = 0
-    insert_count = 0
-    results = []
-    entity_name = "Account"  # Replace with dynamic entity name if needed
-    data_to_export = []  # List to store data for Excel export
-
-    for user_id in request.user_ids:
-        try:
-            # Step 1: Fetch user data from the staging database
-            user_data = get_user_from_db(user_id)
-            if not user_data:
-                logger.error(f"User {user_id} not found in staging database")
-                raise HTTPException(status_code=404, detail=f"User {user_id} not found in staging database")
-
-            # Add user data to the export list
-            data_to_export.append(user_data)
-
-            # Step 2: Apply anonymization to user data
-            anonymized_data = {
-                "id": user_data["id"],
-                "name": anonymize_data(user_data["name"], "name"),
-                "lastname": anonymize_data(user_data["lastname"], "lastname"),
-                "email": anonymize_data(user_data["email"], "email"),  # Anonymized email
-                "phone": anonymize_data(user_data["phone"], "phone"),
-            }
-
-            # Log anonymization success
-            logger.info(f"Successfully anonymized data for user {user_id}")
-            log_migration_result(
-                user_id=user_id,
-                staging_status="Anonymization Success",
-                crm_status="Pending",
-                crm_entity_updated=False
-            )
-
-            # Step 3: Migrate anonymized data to CRM
-            staging_status = "Success"
-            crm_result = migrate_to_crm(anonymized_data)  # Pass anonymized_data
-            crm_status = "Success" if crm_result["success"] else "Failed"
-            crm_entity_updated = crm_result["success"]
-
-            # Step 4: Update counts based on CRM result
-            if crm_result["success"]:
-                success_count += 1
-                if crm_result["action"] == "updated":
-                    update_count += 1
-                elif crm_result["action"] == "inserted":
-                    insert_count += 1
-            else:
-                error_count += 1
-
-            # Log CRM migration result
-            logger.info(f"CRM migration result for user {user_id}: {crm_result}")
-            log_migration_result(
-                user_id=user_id,
-                staging_status=staging_status,
-                crm_status=crm_status,
-                crm_entity_updated=crm_entity_updated,
-                error_message=crm_result.get("error", None)  # Log any errors from CRM
-            )
-
-            # Add result to the results list
-            results.append({
-                "user_id": user_id,
-                "staging_status": staging_status,
-                "crm_status": crm_status,
-                "action": crm_result.get("action", "none"),
-                "error": crm_result.get("error", None)  # Include error details if any
-            })
-
-        except Exception as e:
-            # Handle unexpected errors
-            error_count += 1
-            logger.error(f"An unexpected error occurred while migrating user {user_id}: {str(e)}")
-            log_migration_result(
-                user_id=user_id,
-                staging_status="Failed",
-                crm_status="Failed",
-                crm_entity_updated=False,
-                error_message=str(e)
-            )
-            results.append({
-                "user_id": user_id,
-                "staging_status": "Failed",
-                "crm_status": "Failed",
-                "error": str(e)
-            })
-    
-    # Export data to Excel
-    excel_file_path = export_to_excel(data_to_export, entity_name)
-    background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
-
-    # Return the final migration summary
-    return {
-        "total_records": total_records,
-        "success_count": success_count,
-        "error_count": error_count,
-        "update_count": update_count,
-        "insert_count": insert_count,
-        "entity_name": entity_name,
-        "results": results,
-        "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"  # URL to download the Excel file
     }
 
 
