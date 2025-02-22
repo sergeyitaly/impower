@@ -220,7 +220,7 @@
                 };
                 logsContainer.innerHTML += `<p>📤 Sending payload: ${JSON.stringify(payload)}</p>`;            
                 autoScrollLogs();            
-
+                document.getElementById("migrationSummary").style.display = "none";
                 try {
                     const response = await fetch("/save-matching-columns", {
                         method: "POST",
@@ -258,7 +258,7 @@
                 const migrateEntityBtn = $("#migrateEntityBtn");
                 const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
                 const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
-            
+                document.getElementById("migrationSummary").style.display = "none";
                 if (!selectedFaciliooEntity || !selectedCrmEntity) {
                     logsContainer.innerHTML = `<strong>Please select both entities to compare.</strong>`;
                     return;
@@ -349,11 +349,11 @@
                     alert("Please select both Facilioo and CRM entities.");
                     return;
                 }
-            
                 const logsContainer = document.getElementById("logsContainer");
                 logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
                 autoScrollLogs();
                 logsContainer.style.display = "block";
+                document.getElementById("migrationSummary").style.display = "none";
                 showLoadingSpinner();
                 try {
                     // Fetch entity fields and matched fields
@@ -477,7 +477,9 @@
                                 option.selected = true;
                             }
             
-                            matchedFieldsDropdown.appendChild(option);
+                            //matchedFieldsDropdown.appendChild(option);
+                            matchedFieldsDropdown.prepend(option);
+
                         });
             
                         // Show the dropdown container only if there are matched fields
@@ -518,6 +520,7 @@
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.innerHTML = "";
             logsContainer.style.display = "block";
+            document.getElementById("migrationSummary").style.display = "none";
             resetProgressBars();
             showLoadingSpinner();
         
@@ -617,6 +620,7 @@
                             <strong>CRM Status:</strong> ${result.crm_status} <br>
                             <strong>Action:</strong> ${result.action || "none"} <br>
                             ${result.error ? `<strong>Error:</strong> ${result.error}` : ""}
+                            ${result.failed_fields ? `<strong>Failed Fields:</strong> ${result.failed_fields.join(", ")}` : ""}
                         </p>
                     `;
                     autoScrollLogs();
@@ -674,8 +678,6 @@
                 hideLoadingSpinner();
             }
         });
-
-
 
         function autoScrollLogs() {
             const logsContainer = document.getElementById("logsContainer");
@@ -755,6 +757,7 @@
                 if (!response.ok) {throw new Error("Failed to fetch entities list");}
                 const entities = await response.json();
                 const entitySelect = document.getElementById("entitySelect");
+                document.getElementById("migrationSummary").style.display = "none";
                 entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
                 entities.forEach(entity => {
                     const option = document.createElement("option");
@@ -935,6 +938,7 @@
                 const logsContainer = document.getElementById("logsContainer");
                 logsContainer.innerHTML = "";
                 logsContainer.style.display = "block";
+                document.getElementById("migrationSummary").style.display = "none";
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for entity: ${selectedEntity}...</p>`;
                 autoScrollLogs();
                 document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}...`;

@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import random
 import string
 import json
-from typing import List
+from typing import Dict, List
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from models import User  # Ensure models.py is in the same directory
@@ -1105,7 +1105,7 @@ def extract_record_id_from_error(response):
         raise ValueError("Failed to parse the error response.")
     
 
-def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str):
+def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str) -> Dict:
     # If matched_fields is a JSON string, parse it to a list
     if isinstance(matched_fields, str):
         matched_fields = json.loads(matched_fields)
@@ -1115,6 +1115,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
     logger.info(f"Matched fields received: {matched_fields}")
     
     crm_data = {}
+    failed_fields = []  # Track fields that fail validation or processing
 
     # Iterate over the matched fields (now a list of strings in the format 'facilioo_field-crm_field')
     for field_pair in matched_fields:
@@ -1128,6 +1129,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             # Ensure that the value is not the field name itself
             if entity_data[facilioo_field] == facilioo_field:
                 logger.warning(f"Source field '{facilioo_field}' contains the field name instead of data. Skipping field.")
+                failed_fields.append(facilioo_field)  # Add to failed fields
             else:
                 # Determine the field type based on the CRM field name
                 if 'email' in crm_field.lower():
@@ -1144,7 +1146,11 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
                 # Anonymize the data if a field type is determined
                 if field_type:
                     anonymized_value = anonymize_data(entity_data[facilioo_field], field_type)
-                    crm_data[crm_field] = anonymized_value
+                    if anonymized_value is None:
+                        logger.warning(f"Failed to anonymize field '{facilioo_field}'. Skipping field.")
+                        failed_fields.append(facilioo_field)  # Add to failed fields
+                    else:
+                        crm_data[crm_field] = anonymized_value
                 else:
                     # Handle GUID fields (e.g., contactid, accountid)
                     if crm_field.lower().endswith('id') and crm_field.lower() != 'id':
@@ -1154,10 +1160,12 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
                             crm_data[crm_field] = guid_value
                         else:
                             logger.warning(f"Invalid GUID value for field '{crm_field}'. Skipping field.")
+                            failed_fields.append(facilioo_field)  # Add to failed fields
                     else:
                         crm_data[crm_field] = entity_data[facilioo_field]  # No anonymization
         else:
             logger.warning(f"Facilioo field {facilioo_field} not found in entity_data. Skipping field.")
+            failed_fields.append(facilioo_field)  # Add to failed fields
     
     logger.info(f"CRM Data being sent: {crm_data}")
 
@@ -1204,10 +1212,10 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
 
                     if update_response.status_code in [200, 204]:
                         logger.info(f"Successfully updated record {existing_record_id} in CRM.")
-                        return {"success": True, "action": "updated"}
+                        return {"success": True, "action": "updated", "failed_fields": failed_fields}
                     else:
                         logger.error(f"Failed to update record {existing_record_id} in CRM. Status code: {update_response.status_code}, Response: {update_response.text}")
-                        return {"success": False, "action": "update_failed"}
+                        return {"success": False, "action": "update_failed", "failed_fields": failed_fields}
 
         # Step 2: If the record does not exist, perform an insert
         create_response = requests.post(crm_url, headers={
@@ -1217,15 +1225,15 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
 
         if create_response.status_code in [200, 201, 204]:  # Success status codes
             logger.info(f"Successfully inserted new record into CRM. Response: {create_response.text}")
-            return {"success": True, "action": "inserted"}
+            return {"success": True, "action": "inserted", "failed_fields": failed_fields}
         else:
             logger.error(f"Failed to insert or update record in CRM. Status code: {create_response.status_code}, Response: {create_response.text}")
-            return {"success": False, "action": "creation_failed"}
+            return {"success": False, "action": "creation_failed", "failed_fields": failed_fields}
 
     except Exception as e:
         logger.error(f"An error occurred while migrating entity data to CRM: {str(e)}")
-        return {"success": False, "action": "error", "error": str(e)}
-
+        return {"success": False, "action": "error", "error": str(e), "failed_fields": failed_fields}
+    
 
 def migrate_to_crm(user_data: dict):
     access_token = get_crm_access_token()
@@ -1389,7 +1397,6 @@ class MigrateResponse(BaseModel):
     excel_file_url: Optional[str]
 
 
-
 @app.post("/migrate-entity", response_model=MigrateResponse)
 async def migrate_entity(
     request: MigrateEntityRequest,
@@ -1438,6 +1445,9 @@ async def migrate_entity(
             else:
                 error_count += 1
 
+            # Track failed fields
+            failed_fields = crm_result.get("failed_fields", [])  # Ensure this is returned from migrate_entity_to_crm
+
             # Add the record to the export data
             data_to_export.append(record)
 
@@ -1447,7 +1457,8 @@ async def migrate_entity(
                 "staging_status": "Success",
                 "crm_status": "Success" if crm_result["success"] else "Failed",
                 "action": crm_result.get("action", "none"),
-                "error": crm_result.get("error", None)
+                "error": crm_result.get("error", None),
+                "failed_fields": failed_fields  # Include failed fields in the result
             })
 
         except Exception as e:
@@ -1457,7 +1468,8 @@ async def migrate_entity(
                 "record_id": record.get("id"),
                 "staging_status": "Failed",
                 "crm_status": "Failed",
-                "error": str(e)
+                "error": str(e),
+                "failed_fields": []  # No specific fields failed, just a general error
             })
 
     # Export data to Excel
@@ -1467,6 +1479,7 @@ async def migrate_entity(
     except Exception as e:
         logger.error(f"Failed to export data to Excel: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
+
     return {
         "total_records": total_records,
         "success_count": success_count,
