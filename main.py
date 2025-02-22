@@ -233,8 +233,8 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
                 break
 
             # Replace hyphens with underscores in the table name
-            table_name = entity_name.lower().replace("-", "_")
-
+            #table_name = entity_name.lower().replace("-", "_")
+            table_name = table_entity_name(entity_name)
             # Infer schema from the first page (if not already done)
             if page_number == 1:
                 sample_record = {}
@@ -408,7 +408,8 @@ def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields
 async def get_total_rows(entity_name: str):
     try:
         # Fetch the total number of rows from the database
-        table_name = entity_name.lower().replace("-", "_")
+        #table_name = entity_name.lower().replace("-", "_")
+        table_name = table_entity_name(entity_name)
         db = SessionLocal()
         total_records = db.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar()
         db.close()
@@ -423,7 +424,7 @@ async def fetch_and_save_entity(entity_name: str, background_tasks: BackgroundTa
         raise HTTPException(status_code=401, detail="Unauthorized")
     access_token = authorization.split("Bearer ")[1]
     try:
-        result = fetch_and_save_entity_data(access_token, entity_name)
+        result = fetch_and_save_entity_data(access_token, table_entity_name(entity_name))
         return {"success": True, "message": f"Entity {entity_name} data fetching and saving initiated", "columns": result["columns"]}
     except Exception as e:
         logger.error(f"Error fetching and saving entity {entity_name}: {str(e)}")

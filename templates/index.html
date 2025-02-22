@@ -238,6 +238,7 @@
                     }
                     isDropdownChanged = false;
                     saveMatchingBtn.hide();
+                    matchedFieldsDropdownContainer.style.display = "none";
                     migrateEntityBtn.show();
 
         
@@ -285,8 +286,8 @@
                                 //matchedFieldsDropdown.appendChild(option);
                                 matchedFieldsDropdown.prepend(option);  
                             });
-                            matchedFieldsDropdownContainer.style.display = "block"; // Show the dropdown container
-            
+                            matchedFieldsDropdownContainer.style.display = "none"; // Hide the dropdown container
+
                             // Display the table with matched fields
                             let tableHTML = `
                                 <strong>Comparing:</strong> 
@@ -402,7 +403,7 @@
                         const matchedFields = [];
                         const uniqueFaciliooFields = [];
                         const uniqueCrmFields = [];
-            
+
                         faciliooFields.forEach(faciliooField => {
                             let isMatched = false;
                             crmFields.forEach(crmField => {
@@ -460,7 +461,7 @@
                         tableHtml += "</table>";
                         logsContainer.innerHTML += tableHtml;
                         autoScrollLogs();
-            
+
                         // Populate the dropdown with matched fields
                         const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
                         matchedFieldsDropdown.innerHTML = ""; // Clear existing options
@@ -476,8 +477,7 @@
                                 option.selected = true;
                             }
             
-                            //matchedFieldsDropdown.appendChild(option);
-                            matchedFieldsDropdown.prepend(option);  
+                            matchedFieldsDropdown.appendChild(option);
                         });
             
                         // Show the dropdown container only if there are matched fields
