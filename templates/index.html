@@ -684,6 +684,8 @@
             logsContainer.scrollTop = logsContainer.scrollHeight; // Scroll to the bottom
         }
 
+
+
         document.getElementById("authenticateBtn").addEventListener("click", async () => {
             const email = document.getElementById("email").value;
             const password = document.getElementById("password").value;
@@ -715,6 +717,7 @@
                 document.getElementById("logsSection").style.display = "block";
                 document.getElementById("entityControls").style.display = "flex";
                 await fetchAndPopulateCrmEntities();
+                await populateEntityDropdown();
             } catch (error) {
                 console.error("Error during authentication:", error);
                 alert(`Authentication failed: ${error.message}`);
@@ -750,34 +753,50 @@
         }
     }
 
-        // Fetch and populate Facilioo entities dropdown
-        async function populateEntityDropdown() {
+    
+    
+    document.addEventListener("DOMContentLoaded", () => {
+            if (accessToken) {fetchAndPopulateCrmEntities()}
+        });
+        document.addEventListener("DOMContentLoaded", () => {
+            if (accessToken) {populateEntityDropdown();}
+        });    
+
+    async function populateEntityDropdown() {
             try {
-                const response = await fetch("/facilioo-entities");
-                if (!response.ok) {throw new Error("Failed to fetch entities list");}
+                const response = await fetch("/facilioo-entities-with-status", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ access_token: accessToken }), 
+
+                });
+                if (!response.ok) {
+                    throw new Error("Failed to fetch entities list");
+                }
                 const entities = await response.json();
                 const entitySelect = document.getElementById("entitySelect");
                 document.getElementById("migrationSummary").style.display = "none";
                 entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
                 entities.forEach(entity => {
                     const option = document.createElement("option");
-                    option.value = entity;
-                    option.textContent = entity.replace(/-/g, " "); 
+                    option.value = entity.name;
+                    option.textContent = entity.name.replace(/-/g, " ");
+                    if (!entity.has_data) {
+                        option.disabled = true;  // Disable the option so it cannot be selected
+                    }
                     entitySelect.appendChild(option);
                 });
             } catch (error) {
                 console.error("Error fetching entities list:", error);
                 alert("Failed to fetch Facilioo entities. Please try again.");
             }
-        }
-
-    
-    
-    document.addEventListener("DOMContentLoaded", () => {
-            if (accessToken) {fetchAndPopulateCrmEntities();}
-        });
-
-
+        }        
+        
+        
+        
         async function fetchEntitiesList() {
             try {
                 const response = await fetch("/facilioo-entities");
@@ -793,21 +812,6 @@
 
         }
 
-        
-        // Fetch data for the selected entity
-        async function fetchEntityData(entityName) {
-            try {
-                const response = await fetch(`/fetch-and-save-entity?entity_name=${entityName}`, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${accessToken}`,
-                        "Content-Type": "application/json",
-                    },
-                });
-                if (!response.ok) {throw new Error("Failed to fetch entity data");}
-                const data = await response.json();return data;
-            } catch (error) {console.error("Error fetching entity data:", error);throw error;}
-        }
 
 
         document.getElementById("fetchEntityBtnCRM").addEventListener("click", async () => {
@@ -839,6 +843,23 @@
                 autoScrollLogs();
             }
         });
+
+
+                
+        // Fetch data for the selected entity
+        async function fetchEntityData(entityName) {
+            try {
+                const response = await fetch(`/fetch-and-save-entity?entity_name=${entityName}`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
+                if (!response.ok) {throw new Error("Failed to fetch entity data");}
+                const data = await response.json();return data;
+            } catch (error) {console.error("Error fetching entity data:", error);throw error;}
+        }
 
             // Event listener for the "Fetch Entity Data" button
             document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
@@ -971,27 +992,7 @@
             }
         }
 
-        document.addEventListener("DOMContentLoaded", () => {populateEntityDropdown();});
-        async function fetchAndSaveUsers(accessToken) {
-            try {
-                const response = await fetch("/fetch-and-save-users", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${accessToken}`,
-                    },
-                });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Failed to fetch and save users');
-                }
-                const data = await response.json();return data;
-            } catch (error) {
-                console.error("Error during fetch and save users:", error);
-                throw new Error(error.message || 'Error fetching and saving users');
-            }
-        }
-
+        
         async function getCrmContactsUrl() {
             try {
                 const response = await fetch('/api/crm-contacts-url');

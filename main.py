@@ -1,5 +1,5 @@
 import psycopg2
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header, Depends
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header, Depends, Query
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -10,7 +10,6 @@ import random
 import string
 import json
 from typing import Dict, List
-import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from models import User  # Ensure models.py is in the same directory
 from sqlalchemy import create_engine
@@ -21,7 +20,6 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import httpx
 from urllib.parse import quote
-from openpyxl import Workbook
 from fastapi.responses import FileResponse
 import time
 from datetime import datetime
@@ -30,8 +28,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 import re
-from sqlalchemy.exc import ProgrammingError
 import uuid
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -99,8 +97,8 @@ class DataResponse(BaseModel):
 FACILIOO_ENTITIES = [
     "accounts", "account-contact-details", "account-groups", "account-permissions",
     "activity-attempts", "attendances", "attributes", "attribute-groups", "attribute-group-types",
-    "attribute-values", "auths", "bank-accounts", "billing-addresses", "booking-account-item-vs",
-    "booking-account-vs", "chatgpt-settings", "colors", "conferences", "conference-document-settings",
+    "attribute-values", "auths", "bank-accounts", "billing-addresses", "booking-account-item",
+    "booking-account", "chatgpt-settings", "colors", "conferences", "conference-document-settings",
     "conference-document-templates", "conference-settings", "consumption-brands", "consumption-meters",
     "consumption-readings", "consumption-reading-dates", "consumption-reading-extendeds",
     "consumption-types", "contact-details", "contact-types", "customer-apps", "customer-app-custom-contents",
@@ -147,7 +145,6 @@ def get_facilioo_entities(access_token: str):
         logging.error(f"Error fetching Facilioo entities: {str(e)}")
         raise
 
-#FACILIOO_ENTITIES = [entity.replace("-", "_") for entity in FACILIOO_ENTITIES]
 @app.get("/facilioo-entities")
 async def get_facilioo_entities():
     return FACILIOO_ENTITIES
@@ -194,7 +191,52 @@ def create_table_for_entity(entity_name: str, sample_record: dict):
     except Exception as e:
         logger.error(f"Error creating table for entity {entity_name.lower()}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
+class FaciliooEntitiesRequest(BaseModel):
+    access_token: str
 
+@app.post("/facilioo-entities-with-status")
+def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
+    access_token = request.access_token
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Access token is required")
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+    entities = FACILIOO_ENTITIES  # Replace with your actual list of entities
+    entities_with_status = []
+
+    for entity in entities:
+        try:
+            logger.info(f"Checking status for entity: {entity}")
+            response = requests.get(
+                f"{API_URL}/api/{entity}",
+                headers=headers,
+                params={"PageSize": 1, "PageNumber": 1, "AscendingOrder": True},
+            )
+
+            logger.info(f"Response status code for {entity}: {response.status_code}")
+            logger.info(f"Response body for {entity}: {response.text}")  # Log the response body for debugging
+
+            if response.status_code == 200:
+                entity_data = response.json().get("items", [])
+                if entity_data:
+                    logger.info(f"Entity {entity} has data: {entity_data}")
+                    entities_with_status.append({"name": entity, "has_data": True})  # Entity has data
+                else:
+                    logger.info(f"Entity {entity} has no data.")
+                    entities_with_status.append({"name": entity, "has_data": False})  # Entity has no data
+            else:
+                logger.warning(f"Failed to fetch data for entity {entity}. Status code: {response.status_code}")
+                entities_with_status.append({"name": entity, "has_data": False})  # Assume no data if API call fails
+        except Exception as e:
+            logger.error(f"Error checking status for entity {entity}: {str(e)}", exc_info=True)
+            entities_with_status.append({"name": entity, "has_data": False})  # Assume no data on error
+
+    logger.info(f"Final entities_with_status: {entities_with_status}")
+    return entities_with_status
 
 def fetch_and_save_entity_data(access_token: str, entity_name: str):
     headers = {
@@ -223,7 +265,6 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
                     "AscendingOrder": True,
                 },
             )
-
             if response.status_code != 200:
                 logger.error(f"Failed to fetch data for entity {entity_name}: {response.text}")
                 break
@@ -232,11 +273,7 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
             if not entity_data:
                 logger.info(f"No more data found for entity {entity_name}.")
                 break
-
-            # Replace hyphens with underscores in the table name
-            #table_name = entity_name.lower().replace("-", "_")
             table_name = table_entity_name(entity_name)
-            # Infer schema from the first page (if not already done)
             if page_number == 1:
                 sample_record = {}
                 if entity_data:  # If data is fetched, use the first record to infer the schema
@@ -244,11 +281,8 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
                         sample_record.update(record)
                 else:  # If no data is fetched, create an empty table with default columns
                     sample_record = {"id": 1, "name": "default", "created_at": datetime.now()}  # Example default columns
-
-                # Create the table and get inferred columns
                 logger.info(f"Creating table for entity: {table_name}")
                 inferred_columns = create_table_for_entity(table_name, sample_record)
-
             # Save data to the database
             db = SessionLocal()
             try:
@@ -485,7 +519,7 @@ async def fetch_and_save_entity(entity_name: str, background_tasks: BackgroundTa
         raise HTTPException(status_code=401, detail="Unauthorized")
     access_token = authorization.split("Bearer ")[1]
     try:
-        result = fetch_and_save_entity_data(access_token, table_entity_name(entity_name))
+        result = fetch_and_save_entity_data(access_token, entity_name)
         return {"success": True, "message": f"Entity {entity_name} data fetching and saving initiated", "columns": result["columns"]}
     except Exception as e:
         logger.error(f"Error fetching and saving entity {entity_name}: {str(e)}")
