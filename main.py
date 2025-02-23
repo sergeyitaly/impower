@@ -29,6 +29,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Generator
 
 
 logging.basicConfig(level=logging.INFO)
@@ -470,18 +472,13 @@ def fetch_all_entity_data_from_staging(db: Session, entity_name: str) -> list:
 def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields: list) -> list:
     logger.info(f"Fetching data from staging for entity: {entity_name}")
     logger.info(f"Matched fields are: {matched_fields}")
-
     try:
-        # Construct and log the query
         entity_name = table_entity_name(entity_name)
         query = text(f"SELECT * FROM {entity_name}")
         logger.debug(f"Executing query: {query}")
-
-        # Execute the query
         result = db.execute(query)
         column_names = result.keys()  # Get column names from the query result
         records = [dict(zip(column_names, row)) for row in result.fetchall()]  # Convert tuples to dictionaries
-        
         logger.info(f"Retrieved {len(records)} records for entity: {entity_name}")
         logger.debug(f"Sample record: {records[0] if records else 'No records found'}")  # Debug log
         for record in records:
@@ -491,17 +488,12 @@ def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields
         if not records:
             logger.warning(f"No records found for entity: {entity_name}")
             return []
-
-        # Process fields based on matched_fields
         processed_records = []
         for record in records:
             processed_record = {}
             for field_pair in matched_fields:  # Iterate over the list of field strings
-                # Split the string into 'facilioo_field' and 'crm_field'
                 facilioo_field, crm_field = field_pair.split('-')
-                
                 if facilioo_field in record:  # Ensure the source field exists
-                    # Use the actual data from the record, not the field name
                     processed_record[facilioo_field] = record[facilioo_field]
                 else:
                     logger.warning(f"Facilioo field '{facilioo_field}' not found in record for entity: {entity_name}")
@@ -1236,9 +1228,12 @@ def migrate_to_crm(user_data: dict):
     except Exception as e:
         logger.error(f"An error occurred while migrating user data to CRM: {str(e)}")
         return {"success": False, "action": "error", "error": str(e)}
-
 def export_all_entity_to_excel(data: list, entity_name: str) -> str:
     from openpyxl import Workbook
+    import re
+
+    def sanitize_filename(name):
+        return re.sub(r'[\\/*?:"<>|]', "_", name)
 
     wb = Workbook()
     ws = wb.active
@@ -1254,7 +1249,10 @@ def export_all_entity_to_excel(data: list, entity_name: str) -> str:
         if not isinstance(record, dict):
             raise ValueError(f"Invalid record in data: {record}. Expected a dictionary.")
 
+        # Ensure all values are serializable (e.g., convert booleans to strings)
+        record = {k: str(v) if isinstance(v, bool) else v for k, v in record.items()}
         anonymized_row = {}
+
         for field_name, value in record.items():
             if not isinstance(field_name, str):
                 raise ValueError(f"Invalid field_name: {field_name}. Expected a string.")
@@ -1275,12 +1273,12 @@ def export_all_entity_to_excel(data: list, entity_name: str) -> str:
             else:
                 anonymized_row[field_name] = value  # No anonymization
 
-        ws.append([anonymized_row.get(header) for header in headers])
+        ws.append([str(anonymized_row.get(header)) for header in headers])
 
-    file_path = f"{entity_name}_export.xlsx"
+    file_path = f"{sanitize_filename(entity_name)}_export.xlsx"
     wb.save(file_path)
     return file_path
-
+    
 def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -> str:
     from openpyxl import Workbook
 
@@ -1355,6 +1353,105 @@ async def download_excel(file_name: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, filename=file_name)
 
+
+def process_batch(batch: List[dict], matched_fields: list, selected_crm_entity: str) -> dict:
+    success_count = 0
+    error_count = 0
+    update_count = 0
+    insert_count = 0
+    results = []
+
+    for record in batch:
+        try:
+            crm_result = migrate_entity_to_crm(record, matched_fields, selected_crm_entity)
+            if crm_result["success"]:
+                success_count += 1
+                if crm_result["action"] == "updated":
+                    update_count += 1
+                elif crm_result["action"] == "inserted":
+                    insert_count += 1
+            else:
+                error_count += 1
+
+            results.append({
+                "record_id": record.get("id"),
+                "staging_status": "Success",
+                "crm_status": "Success" if crm_result["success"] else "Failed",
+                "action": crm_result.get("action", "none"),
+                "error": crm_result.get("error", None),
+                "failed_fields": crm_result.get("failed_fields", [])
+            })
+        except Exception as e:
+            error_count += 1
+            results.append({
+                "record_id": record.get("id"),
+                "staging_status": "Failed",
+                "crm_status": "Failed",
+                "error": str(e),
+                "failed_fields": []
+            })
+
+    return {
+        "success_count": success_count,
+        "error_count": error_count,
+        "update_count": update_count,
+        "insert_count": insert_count,
+        "results": results
+    }
+
+def migrate_entity_in_parallel(entity_data: List[dict], matched_fields: list, selected_crm_entity: str, batch_size: int = 100) -> dict:
+    total_records = len(entity_data)
+    batches = [entity_data[i:i + batch_size] for i in range(0, total_records, batch_size)]
+
+    success_count = 0
+    error_count = 0
+    update_count = 0
+    insert_count = 0
+    results = []
+
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_batch, batch, matched_fields, selected_crm_entity) for batch in batches]
+
+        for future in as_completed(futures):
+            batch_result = future.result()
+            success_count += batch_result["success_count"]
+            error_count += batch_result["error_count"]
+            update_count += batch_result["update_count"]
+            insert_count += batch_result["insert_count"]
+            results.extend(batch_result["results"])
+
+    return {
+        "total_records": total_records,
+        "success_count": success_count,
+        "error_count": error_count,
+        "update_count": update_count,
+        "insert_count": insert_count,
+        "results": results
+    }
+
+def fetch_entity_data_in_chunks(db: Session, entity_name: str, matched_fields: list, chunk_size: int = 1000) -> Generator[List[dict], None, None]:
+    """
+    Fetch data from the database in chunks using a generator.
+
+    Args:
+        db (Session): Database session.
+        entity_name (str): Name of the entity/table.
+        matched_fields (list): List of fields to match (unused in this function but kept for compatibility).
+        chunk_size (int): Number of records to fetch per chunk.
+
+    Yields:
+        List[dict]: A list of records (dictionaries) for each chunk.
+    """
+    offset = 0
+    while True:
+        query = text(f"SELECT * FROM {entity_name} LIMIT {chunk_size} OFFSET {offset}")
+        result = db.execute(query)
+        records = [dict(zip(result.keys(), row)) for row in result.fetchall()]
+        if not records:
+            break
+        yield records
+        offset += chunk_size
+
 class MigrateEntityRequest(BaseModel):
     selected_facilioo_entity: str
     selected_crm_entity: str
@@ -1370,8 +1467,55 @@ class MigrateResponse(BaseModel):
     results: List[dict]
     excel_file_url: Optional[str]
 
-
 @app.post("/migrate-entity", response_model=MigrateResponse)
+async def migrate_entity(
+    request: MigrateEntityRequest,
+    background_tasks: BackgroundTasks,
+    authorization: str = Header(None)
+):
+    selected_facilioo_entity = table_entity_name(request.selected_facilioo_entity)
+    selected_crm_entity = request.selected_crm_entity
+
+    # Fetch matched fields
+    matched_fields_response = await get_matching_fields(selected_facilioo_entity, selected_crm_entity, authorization)
+    matched_fields_list = matched_fields_response.get("matched_fields", [])
+    if not matched_fields_list:
+        raise HTTPException(status_code=400, detail="No matched fields found for the selected entities.")
+
+    # Fetch data from staging database in chunks
+    with SessionLocal() as db:
+        entity_data = []
+        for chunk in fetch_entity_data_in_chunks(db, selected_facilioo_entity, matched_fields_list):
+            entity_data.extend(chunk)
+
+    if not entity_data:
+        raise HTTPException(status_code=400, detail="No records found in the staging database.")
+
+    # Process data in parallel
+    migration_result = migrate_entity_in_parallel(entity_data, matched_fields_list, selected_crm_entity)
+
+    # Export data to Excel
+    try:
+        excel_file_path = export_entity_to_excel(entity_data, selected_crm_entity, matched_fields_list)
+        background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=180)
+    except Exception as e:
+        logger.error(f"Failed to export data to Excel: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
+
+    return {
+        "total_records": migration_result["total_records"],
+        "success_count": migration_result["success_count"],
+        "error_count": migration_result["error_count"],
+        "update_count": migration_result["update_count"],
+        "insert_count": migration_result["insert_count"],
+        "entity_name": selected_facilioo_entity,
+        "results": migration_result["results"],
+        "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
+    }
+
+
+
+@app.post("/migrate-entity-old", response_model=MigrateResponse)
 async def migrate_entity(
     request: MigrateEntityRequest,
     background_tasks: BackgroundTasks,
