@@ -456,7 +456,10 @@ def fetch_all_entity_data_from_staging(db: Session, entity_name: str) -> list:
         if not records:
             logger.warning(f"No records found for entity: {entity_name}")
             return []
-
+        for record in records:
+            for key, value in record.items():
+                if isinstance(value, bool):
+                    record[key] = str(value)  
         return records  # Return all records as-is
     
     except Exception as e:
@@ -481,7 +484,10 @@ def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields
         
         logger.info(f"Retrieved {len(records)} records for entity: {entity_name}")
         logger.debug(f"Sample record: {records[0] if records else 'No records found'}")  # Debug log
-
+        for record in records:
+            for key, value in record.items():
+                if isinstance(value, bool):
+                    record[key] = str(value) 
         if not records:
             logger.warning(f"No records found for entity: {entity_name}")
             return []
@@ -1230,55 +1236,31 @@ def migrate_to_crm(user_data: dict):
     except Exception as e:
         logger.error(f"An error occurred while migrating user data to CRM: {str(e)}")
         return {"success": False, "action": "error", "error": str(e)}
-    
-def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -> str:
-    from openpyxl import Workbook
-    wb = Workbook()
-    ws = wb.active
-    ws.title = entity_name
-    crm_fields = [field_pair.split('-')[1] for field_pair in matched_fields]
-    ws.append(crm_fields)
-    for record in data:
-        anonymized_row = {}
-        for field_pair in matched_fields:
-            facilioo_field, crm_field = field_pair.split('-')
-            if facilioo_field in record:
-                # Identify the field type to anonymize it
-                field_type = None
-                if 'email' in crm_field.lower():
-                    field_type = 'email'
-                elif 'name' in crm_field.lower() and 'last' not in crm_field.lower():
-                    field_type = 'name'
-                elif 'lastname' in crm_field.lower():
-                    field_type = 'lastname'
-                elif 'phone' in crm_field.lower():
-                    field_type = 'phone'
-                value = record[facilioo_field]
-                if field_type:
-                    anonymized_row[crm_field] = anonymize_data(value, field_type)
-                else:
-                    anonymized_row[crm_field] = value  # No anonymization
-            else:
-                anonymized_row[crm_field] = None
-        ws.append([anonymized_row.get(crm_field, None) for crm_field in crm_fields])
-    file_path = f"{entity_name}_export.xlsx"
-    wb.save(file_path)
-    return file_path
-
-
 
 def export_all_entity_to_excel(data: list, entity_name: str) -> str:
     from openpyxl import Workbook
+
     wb = Workbook()
     ws = wb.active
     ws.title = entity_name
-    if data:
-        headers = list(data[0].keys())  # Get all field names from the first record
-        ws.append(headers)
+
+    if not data:
+        raise ValueError("Data is empty. Cannot export to Excel.")
+
+    headers = list(data[0].keys())  # Get all field names from the first record
+    ws.append(headers)
+
     for record in data:
+        if not isinstance(record, dict):
+            raise ValueError(f"Invalid record in data: {record}. Expected a dictionary.")
+
         anonymized_row = {}
         for field_name, value in record.items():
+            if not isinstance(field_name, str):
+                raise ValueError(f"Invalid field_name: {field_name}. Expected a string.")
+
             field_type = None
+
             if 'email' in field_name.lower():
                 field_type = 'email'
             elif 'name' in field_name.lower() and 'last' not in field_name.lower():
@@ -1287,14 +1269,79 @@ def export_all_entity_to_excel(data: list, entity_name: str) -> str:
                 field_type = 'lastname'
             elif 'phone' in field_name.lower():
                 field_type = 'phone'
+
             if field_type:
                 anonymized_row[field_name] = anonymize_data(value, field_type)
             else:
                 anonymized_row[field_name] = value  # No anonymization
+
         ws.append([anonymized_row.get(header) for header in headers])
+
     file_path = f"{entity_name}_export.xlsx"
     wb.save(file_path)
     return file_path
+
+def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -> str:
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = entity_name
+
+    # Ensure matched_fields is a list of strings
+    if not isinstance(matched_fields, list):
+        raise ValueError("matched_fields must be a list of strings.")
+
+    crm_fields = []
+    for field_pair in matched_fields:
+        if isinstance(field_pair, str):
+            crm_fields.append(field_pair.split('-')[1])
+        else:
+            raise ValueError(f"Invalid field_pair in matched_fields: {field_pair}. Expected a string.")
+
+    ws.append(crm_fields)
+
+    for record in data:
+        if not isinstance(record, dict):
+            raise ValueError(f"Invalid record in data: {record}. Expected a dictionary.")
+
+        anonymized_row = {}
+
+        for field_pair in matched_fields:
+            if not isinstance(field_pair, str):
+                raise ValueError(f"Invalid field_pair in matched_fields: {field_pair}. Expected a string.")
+
+            facilioo_field, crm_field = field_pair.split('-')
+
+            if facilioo_field in record:
+                value = record[facilioo_field]
+                field_type = None
+
+                # ✅ Ensure crm_field is a string before using .lower()
+                if isinstance(crm_field, str):
+                    if 'email' in crm_field.lower():
+                        field_type = 'email'
+                    elif 'name' in crm_field.lower() and 'last' not in crm_field.lower():
+                        field_type = 'name'
+                    elif 'lastname' in crm_field.lower():
+                        field_type = 'lastname'
+                    elif 'phone' in crm_field.lower():
+                        field_type = 'phone'
+
+                if field_type:
+                    anonymized_row[crm_field] = anonymize_data(value, field_type)
+                else:
+                    anonymized_row[crm_field] = value  # No anonymization
+            else:
+                anonymized_row[crm_field] = None
+
+        ws.append([anonymized_row.get(crm_field, None) for crm_field in crm_fields])
+
+    file_path = f"{entity_name}_export.xlsx"
+    wb.save(file_path)
+    return file_path
+
+
 
 def delete_file_after_delay(file_path: str, delay: int = 60):
     time.sleep(delay)
