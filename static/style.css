@@ -358,20 +358,3 @@ input:focus {
 .animate-spin {
     animation: spin 1s linear infinite;
 }
-
-#copyLogsButton {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background-color: #e2e8f0; /* bg-gray-200 */
-    color: #4a5568; /* text-gray-700 */
-    padding: 4px 8px; /* py-1 px-2 */
-    border-radius: 6px; /* rounded-md */
-    font-size: 0.875rem; /* text-sm */
-    opacity: 0;
-    transition: opacity 0.2s ease-in-out;
-}
-
-#logsContainer:hover #copyLogsButton {
-    opacity: 1;
-}

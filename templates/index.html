@@ -946,10 +946,6 @@
                             const excelLink = document.getElementById("excelLink");
                             excelLink.href = exportData.excel_file_url;
                         }
-
-                        logsContainer.innerHTML += `<p><i class="fas fa-file-excel"></i> <a id="excelLink" href="${exportData.excel_file_url}" target="_blank">Download Excel File</a></p>`;
-                        logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
-                        logsContainer.innerHTML += `<pre>${exportData.columns.join("\n")}</pre>`;
                         document.getElementById("excelDownload").style.display = "block";
 
                         autoScrollLogs();

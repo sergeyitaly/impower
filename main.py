@@ -157,36 +157,39 @@ RESERVED_KEYWORDS = ["order", "group", "select", "insert", "update", "delete", "
 def is_boolean_like(value):
     if isinstance(value, bool):
         return True
-    if isinstance(value, (int, float)):
-        return value in (0, 1)
     if isinstance(value, str):
-        return value.lower() in ("true", "false", "t", "f", "yes", "no", "y", "n", "1", "0")
+        return value.lower() in ("true", "false", "t", "f", "yes", "no", "y", "n")
     return False
 
-def is_boolean_column_by_values(values):
-    return all(is_boolean_like(v) for v in values if v is not None)  # Ignore None values
+def convert_to_boolean(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 1
+    if isinstance(value, str):
+        return value.lower() in ("true", "t", "yes", "y")
+    return False  # Default fallback
 
 def infer_schema_from_record(record: dict) -> list:
     columns = [Column("id", Integer, primary_key=True)]
-    
     for key, value in record.items():
-        if key == "id": continue
+        if key == "id":
+            continue
         column_name = key.lower()
         if value is None:
             logger.warning(f"Column {column_name} has a None value. Defaulting to String.")
             columns.append(Column(column_name, String))
             continue
-        all_values = [v for v in record.values() if v is not None]
-        if is_boolean_column_by_values(all_values):
+        if is_boolean_like(value):
             columns.append(Column(column_name, Boolean))
         elif isinstance(value, str):
             columns.append(Column(column_name, String))
         elif isinstance(value, int):
             columns.append(Column(column_name, Integer))
-        elif isinstance(value, (dict, list)):
-            columns.append(Column(column_name, JSON))
         elif isinstance(value, float):
             columns.append(Column(column_name, Float))
+        elif isinstance(value, (dict, list)):
+            columns.append(Column(column_name, JSON))
         elif isinstance(value, datetime):
             columns.append(Column(column_name, DateTime))
         else:
@@ -262,7 +265,7 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
                     record_dict = {k.lower(): v for k, v in record.items() if k != "id"}  # Convert keys to lowercase                        
                     for column_name, value in record_dict.items():
                         if is_boolean_like(value):  # Convert boolean-like values to proper booleans
-                            record_dict[column_name] = bool(value)
+                            record_dict[column_name] = convert_to_boolean(value)
                     for column_name, value in record_dict.items():
                         if isinstance(value, (dict, list)):
                             record_dict[column_name] = json.dumps(value)
@@ -1399,7 +1402,7 @@ async def migrate_entity(
     # Export data to Excel
     try:
         excel_file_path = export_entity_to_excel(data_to_export, selected_crm_entity, matched_fields_list)
-        background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
+        background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=180)
     except Exception as e:
         logger.error(f"Failed to export data to Excel: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
