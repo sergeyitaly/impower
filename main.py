@@ -23,7 +23,7 @@ from urllib.parse import quote
 from fastapi.responses import FileResponse
 import time
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Table, Float
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Table, Float, JSON
 from sqlalchemy.dialects.postgresql import JSONB
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -118,7 +118,6 @@ FACILIOO_ENTITIES = [
     "work-order-appointment-request-dates", "work-order-feed-entries", "work-order-statuses", "work-order-types"
 ]
 
-FACILIOO_ENT = []
 
 def get_facilioo_entities(access_token: str):
     try:
@@ -149,35 +148,52 @@ def get_facilioo_entities(access_token: str):
 async def get_facilioo_entities():
     return FACILIOO_ENTITIES
 
-def is_boolean_column(column_name: str) -> bool:
-    return column_name.startswith(("is", "has", "can", "should", "allow"))
+class FaciliooEntitiesRequest(BaseModel):
+    access_token: str
+
+
+RESERVED_KEYWORDS = ["order", "group", "select", "insert", "update", "delete", "where"]
+
+def is_boolean_like(value):
+    if isinstance(value, bool):
+        return True
+    if isinstance(value, (int, float)):
+        return value in (0, 1)
+    if isinstance(value, str):
+        return value.lower() in ("true", "false", "t", "f", "yes", "no", "y", "n", "1", "0")
+    return False
+
+def is_boolean_column_by_values(values):
+    return all(is_boolean_like(v) for v in values if v is not None)  # Ignore None values
 
 def infer_schema_from_record(record: dict) -> list:
     columns = [Column("id", Integer, primary_key=True)]
+    
     for key, value in record.items():
-        if key == "id":
-            continue  # Skip the primary key
-        column_name = key.lower()  # Convert column name to lowercase
+        if key == "id": continue
+        column_name = key.lower()
         if value is None:
             logger.warning(f"Column {column_name} has a None value. Defaulting to String.")
             columns.append(Column(column_name, String))
+            continue
+        all_values = [v for v in record.values() if v is not None]
+        if is_boolean_column_by_values(all_values):
+            columns.append(Column(column_name, Boolean))
         elif isinstance(value, str):
             columns.append(Column(column_name, String))
         elif isinstance(value, int):
             columns.append(Column(column_name, Integer))
-        elif isinstance(value, bool):
-            columns.append(Column(column_name, Boolean))
         elif isinstance(value, (dict, list)):
-            columns.append(Column(column_name, JSONB))
+            columns.append(Column(column_name, JSON))
         elif isinstance(value, float):
             columns.append(Column(column_name, Float))
         elif isinstance(value, datetime):
             columns.append(Column(column_name, DateTime))
         else:
             logger.warning(f"Unknown type for column {column_name}: {type(value)}. Defaulting to String.")
-            columns.append(Column(column_name, String))  # Default to String for unknown types
-    return columns
+            columns.append(Column(column_name, String))
 
+    return columns
 
 def create_table_for_entity(entity_name: str, sample_record: dict):
     metadata = MetaData()
@@ -191,52 +207,7 @@ def create_table_for_entity(entity_name: str, sample_record: dict):
     except Exception as e:
         logger.error(f"Error creating table for entity {entity_name.lower()}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
-class FaciliooEntitiesRequest(BaseModel):
-    access_token: str
 
-@app.post("/facilioo-entities-with-status")
-def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
-    access_token = request.access_token
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Access token is required")
-
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
-    }
-    entities = FACILIOO_ENTITIES  # Replace with your actual list of entities
-    entities_with_status = []
-
-    for entity in entities:
-        try:
-            logger.info(f"Checking status for entity: {entity}")
-            response = requests.get(
-                f"{API_URL}/api/{entity}",
-                headers=headers,
-                params={"PageSize": 1, "PageNumber": 1, "AscendingOrder": True},
-            )
-
-            logger.info(f"Response status code for {entity}: {response.status_code}")
-            logger.info(f"Response body for {entity}: {response.text}")  # Log the response body for debugging
-
-            if response.status_code == 200:
-                entity_data = response.json().get("items", [])
-                if entity_data:
-                    logger.info(f"Entity {entity} has data: {entity_data}")
-                    entities_with_status.append({"name": entity, "has_data": True})  # Entity has data
-                else:
-                    logger.info(f"Entity {entity} has no data.")
-                    entities_with_status.append({"name": entity, "has_data": False})  # Entity has no data
-            else:
-                logger.warning(f"Failed to fetch data for entity {entity}. Status code: {response.status_code}")
-                entities_with_status.append({"name": entity, "has_data": False})  # Assume no data if API call fails
-        except Exception as e:
-            logger.error(f"Error checking status for entity {entity}: {str(e)}", exc_info=True)
-            entities_with_status.append({"name": entity, "has_data": False})  # Assume no data on error
-
-    logger.info(f"Final entities_with_status: {entities_with_status}")
-    return entities_with_status
 
 def fetch_and_save_entity_data(access_token: str, entity_name: str):
     headers = {
@@ -288,26 +259,19 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
             try:
                 logger.info(f"Saving {len(entity_data)} records from page {page_number} for entity {table_name}")
                 for record in entity_data:
-                    record_dict = {k.lower(): v for k, v in record.items() if k != "id"}  # Convert keys to lowercase
-
-                    # Cast boolean values to integer for all boolean-like columns
+                    record_dict = {k.lower(): v for k, v in record.items() if k != "id"}  # Convert keys to lowercase                        
                     for column_name, value in record_dict.items():
-                        if is_boolean_column(column_name) and isinstance(value, bool):
-                            record_dict[column_name] = int(value)
-
-                    # Serialize dictionary values to JSON
+                        if is_boolean_like(value):  # Convert boolean-like values to proper booleans
+                            record_dict[column_name] = bool(value)
                     for column_name, value in record_dict.items():
-                        if isinstance(value, dict):
+                        if isinstance(value, (dict, list)):
                             record_dict[column_name] = json.dumps(value)
-
-                    # Escape reserved keywords in column names
-                    escaped_columns = [f'"{col}"' if col.lower() == "order" else col for col in record_dict.keys()]
-
+                    escaped_columns = [f'"{col}"' if col.lower() in RESERVED_KEYWORDS else col for col in record_dict.keys()]
                     stmt = text(f"""
                         INSERT INTO {table_name} (id, {', '.join(escaped_columns)})
                         VALUES (:id, {', '.join([f':{k}' for k in record_dict.keys()])})
                         ON CONFLICT (id) DO UPDATE SET
-                        {', '.join([f'"{col}" = EXCLUDED."{col}"' if col.lower() == "order" else f"{col} = EXCLUDED.{col}" for col in record_dict.keys()])}
+                        {', '.join([f'"{col}" = EXCLUDED."{col}"' if col.lower() in RESERVED_KEYWORDS else f"{col} = EXCLUDED.{col}" for col in record_dict.keys()])}
                     """)
                     logger.debug(f"Executing SQL: {stmt}")
                     db.execute(stmt, {"id": record["id"], **record_dict})
@@ -330,7 +294,51 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
         logger.error(f"Error fetching data for entity {table_name if table_name else entity_name}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
 
-    
+@app.post("/facilioo-entities-with-status")
+def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
+    access_token = request.access_token
+    if not access_token:
+        raise HTTPException(status_code=401, detail="Access token is required")
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+    entities = FACILIOO_ENTITIES  # Replace with your actual list of entities
+    entities_with_status = []
+
+    for entity in entities:
+        try:
+            logger.info(f"Checking status for entity: {entity}")
+            response = requests.get(
+                f"{API_URL}/api/{entity}",
+                headers=headers,
+                params={"PageSize": 1, "PageNumber": 1, "AscendingOrder": True},
+            )
+
+        #    logger.info(f"Response status code for {entity}: {response.status_code}")
+        #    logger.info(f"Response body for {entity}: {response.text}")  # Log the response body for debugging
+
+            if response.status_code == 200:
+                entity_data = response.json().get("items", [])
+                if entity_data:
+        #            logger.info(f"Entity {entity} has data: {entity_data}")
+                    entities_with_status.append({"name": entity, "has_data": True})  # Entity has data
+                else:
+                    logger.info(f"Entity {entity} has no data.")
+                    entities_with_status.append({"name": entity, "has_data": False})  # Entity has no data
+            else:
+        #        logger.warning(f"Failed to fetch data for entity {entity}. Status code: {response.status_code}")
+                entities_with_status.append({"name": entity, "has_data": False})  # Assume no data if API call fails
+        except Exception as e:
+        #    logger.error(f"Error checking status for entity {entity}: {str(e)}", exc_info=True)
+            entities_with_status.append({"name": entity, "has_data": False})  # Assume no data on error
+
+    #logger.info(f"Final entities_with_status: {entities_with_status}")
+    return entities_with_status
+
+
 class ExportRequest(BaseModel):
     entity_name: str
 
