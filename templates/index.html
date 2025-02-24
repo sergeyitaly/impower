@@ -393,7 +393,8 @@
             
                     if (faciliooData.success && crmData.success && matchedFieldsData.success) {
                         const faciliooFields = faciliooData.columns;
-                        const crmFields = crmData.columns;
+                        //const crmFields = crmData.columns;
+                        const crmFields = crmData.columns.map(column => column.mandatory ? `${column.name} *` : column.name);
                         const existingMatchedFields = matchedFieldsData.matched_fields || [];
             
                         const isEntirelyPartOf = (field1, field2) => {
@@ -825,35 +826,60 @@
 
 
 
-        document.getElementById("fetchEntityBtnCRM").addEventListener("click", async () => {
-            const entitySelect = document.getElementById("entitySelectCRM");
-            const selectedEntity = entitySelect.value;
-            if (!selectedEntity) {alert("Please select a CRM entity.");return;}
-            const logsContainer = document.getElementById("logsContainer");
-            logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Fetching column names for CRM entity: ${selectedEntity}...</p>`;
-            autoScrollLogs();
-            logsContainer.style.display = "block";
-            try {
-                const response = await fetch(`/crm-entity-fields?entity_name=${selectedEntity}`, {
-                    method: "GET",
-                    headers: {
-                        "Authorization": `Bearer ${accessToken}`,
-                        "Content-Type": "application/json",
-                    },
-                });
-                if (!response.ok) {throw new Error("Failed to fetch CRM entity fields");}
-                const data = await response.json();
-                if (data.success) {
-                    logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
-                    logsContainer.innerHTML += `<pre>${data.columns.join("\n")}</pre>`; // Display columns in the logs section
-                    autoScrollLogs();
-                } else {logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;autoScrollLogs();}
-            } catch (error) {
-                console.error("Error:", error);
-                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching columns for ${selectedEntity}.</p>`;
+            document.getElementById("fetchEntityBtnCRM").addEventListener("click", async () => {
+                const entitySelect = document.getElementById("entitySelectCRM");
+                const selectedEntity = entitySelect.value;
+                if (!selectedEntity) {
+                    alert("Please select a CRM entity.");
+                    return;
+                }
+
+                const logsContainer = document.getElementById("logsContainer");
+                logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Fetching column names for CRM entity: ${selectedEntity}...</p>`;
                 autoScrollLogs();
-            }
-        });
+                logsContainer.style.display = "block";
+
+                try {
+                    const response = await fetch(`/crm-entity-fields?entity_name=${selectedEntity}`, {
+                        method: "GET",
+                        headers: {
+                            "Authorization": `Bearer ${accessToken}`,
+                            "Content-Type": "application/json",
+                        },
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Failed to fetch CRM entity fields");
+                    }
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
+
+                        // Build the formatted list of columns with mandatory fields highlighted
+                        let columnListHTML = "<ul>";
+                        data.columns.forEach(column => {
+                            if (column.mandatory) {
+                                columnListHTML += `<li style="color: red;">${column.name} *</li>`; // Red color for required fields
+                            } else {
+                                columnListHTML += `<li>${column.name}</li>`;
+                            }
+                        });
+                        columnListHTML += "</ul>";
+
+                        logsContainer.innerHTML += columnListHTML;
+                        autoScrollLogs();
+                    } else {
+                        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;
+                        autoScrollLogs();
+                    }
+                } catch (error) {
+                    console.error("Error:", error);
+                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while fetching columns for ${selectedEntity}.</p>`;
+                    autoScrollLogs();
+                }
+            });
 
 
                 

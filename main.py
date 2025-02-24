@@ -828,6 +828,39 @@ def get_crm_entities(access_token: str):
         logger.error(f"Error fetching CRM entities: {str(e)}")
         raise
 
+
+def get_crm_entities_status(access_token: str):
+    try:
+        # Define the CRM API endpoint to fetch entities
+        query_url = f"{CRM_URL}/EntityDefinitions"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        response = requests.get(query_url, headers=headers)
+        entities_with_status = []
+        if response.status_code == 200:
+            entity_data = response.json().get("value", [])  # Adjust key based on CRM API response
+            for entity in entity_data:
+                entity_name = entity.get("LogicalName", "Unknown Entity")  # Adjust key as per CRM response
+                entity_url = f"{CRM_URL}/{entity_name}"  # Adjust endpoint to fetch records for the entity
+                entity_response = requests.get(entity_url, headers=headers)
+                if entity_response.status_code == 200:
+                    entity_records = entity_response.json().get("value", [])  # Adjust key based on CRM API response
+                    has_data = bool(entity_records)  # True if data exists, False otherwise
+                else:
+                    logger.warning(f"Failed to fetch data for entity {entity_name}. Status code: {entity_response.status_code}")
+                    has_data = False  # Assume no data if API call fails
+                entities_with_status.append({"name": entity_name, "has_data": has_data})
+        else:
+            logger.error(f"Failed to fetch CRM entities. Status: {response.status_code}, Response: {response.text}")
+    except Exception as e:
+        logger.error(f"Error checking CRM entities: {str(e)}", exc_info=True)
+
+    return entities_with_status
+
+
+
 @app.get("/crm-entities")
 async def fetch_crm_entities(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -847,7 +880,6 @@ async def fetch_crm_entities(authorization: Optional[str] = Header(None)):
         logger.error(f"Error fetching CRM entities: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching CRM entities: {str(e)}")
     
-
 def get_crm_entity_fields(entity_name: str, access_token: str):
     try:
         # Define the CRM API endpoint to fetch entity metadata
@@ -860,15 +892,20 @@ def get_crm_entity_fields(entity_name: str, access_token: str):
         if response.status_code != 200:
             raise Exception(f"Failed to fetch entity fields: {response.text}")
 
-        # Parse the response to extract field names
+        # Parse the response to extract field names and required status
         attributes_data = response.json().get("value", [])
-        columns = [attribute["LogicalName"] for attribute in attributes_data]  # Adjust based on API response
+        columns = [
+            {
+                "name": attribute["LogicalName"],
+                "mandatory": attribute.get("RequiredLevel", {}).get("Value") == "ApplicationRequired"
+            }
+            for attribute in attributes_data
+        ]
 
         return columns
     except Exception as e:
         logger.error(f"Error fetching CRM entity fields: {str(e)}")
         raise
-
 
 @app.get("/crm-entity-fields")
 async def fetch_crm_entity_fields(entity_name: str, authorization: Optional[str] = Header(None)):
@@ -1060,6 +1097,20 @@ def anonymize_data(data: str, field_type: str) -> str:
 
     return data
 
+def sanitize_text(value: str) -> str:
+    """ Preprocess text fields to avoid triggering text analytics. """
+    if not isinstance(value, str):
+        return value  # Skip processing for non-text fields
+    sanitized_value = value.strip().lower()  # Normalize case and remove whitespace
+    sanitized_value = ''.join(e for e in sanitized_value if e.isalnum() or e.isspace())  # Remove special characters
+    return sanitized_value[:250]  # Truncate to 250 characters to avoid analytics triggers
+
+def preprocess_field(value):
+    # Example: Remove special characters or format the data
+    if isinstance(value, str):
+        return value.strip()  # Remove leading/trailing whitespace
+    return value
+
 
 def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str) -> Dict:
     # If matched_fields is a JSON string, parse it to a list
@@ -1077,7 +1128,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
     for field_pair in matched_fields:
         # Split the string into 'facilioo_field' and 'crm_field'
         facilioo_field, crm_field = field_pair.split('-')
-        
+        crm_field = crm_field.replace(' *', '').strip()
         logger.info(f"Processing source field: {facilioo_field}, CRM field: {crm_field}")
         
         # Check if the facilioo_field exists in the entity data
@@ -1091,14 +1142,19 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
                     crm_data[crm_field] = guid_value
                 else:
                     logger.warning(f"Invalid GUID value for field '{crm_field}'. Skipping field.")
-                    failed_fields.append(f"{facilioo_field}-{crm_field}")  # Track failed field pair
+                    failed_fields.append(f"{facilioo_field}-{crm_field}")  # Track failed field pair      
+
             else:
                 # Anonymize sensitive data based on field type
-                if crm_field.lower() in ['name', 'lastname', 'email', 'phone']:
+                if facilioo_field.lower() in ['name', 'lastname', 'email', 'phone']:
                     anonymized_value = anonymize_data(str(field_value), crm_field.lower())
                     crm_data[crm_field] = anonymized_value
                 else:
-                    crm_data[crm_field] = field_value  # No anonymization needed
+                    if crm_field=='name': 
+                        field_value=field_value[:100]
+                    crm_data[crm_field] = preprocess_field(field_value)
+                    #crm_data[crm_field] = sanitize_text(field_value)
+
         else:
             logger.warning(f"Facilioo field {facilioo_field} not found in entity_data. Skipping field.")
             failed_fields.append(f"{facilioo_field}-{crm_field}")  # Track failed field pair
@@ -1184,29 +1240,16 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
                 "failed_fields": failed_fields
             }
         else:
-            # Handle Azure Text Analytics error
-            if "Azure-Textanalysefunktion ist nicht aktiviert" in create_response.text:
-                logger.error(f"Azure Text Analytics is not enabled. Please contact your system administrator.")
-                return {
-                    "success": False,
-                    "action": "azure_text_analytics_disabled",
-                    "record_id": entity_data.get("id", "N/A"),
-                    "staging_status": "Success",
-                    "crm_status": "Failed",
-                    "error": "Azure Text Analytics is not enabled. Please contact your system administrator.",
-                    "failed_fields": failed_fields
-                }
-            else:
-                logger.error(f"Failed to insert or update record in CRM. Status code: {create_response.status_code}, Response: {create_response.text}")
-                return {
-                    "success": False,
-                    "action": "creation_failed",
-                    "record_id": entity_data.get("id", "N/A"),
-                    "staging_status": "Success",
-                    "crm_status": "Failed",
-                    "error": create_response.text,
-                    "failed_fields": failed_fields
-                }
+            logger.error(f"Failed to insert or update record in CRM. Status code: {create_response.status_code}, Response: {create_response.text}")
+            return {
+                "success": False,
+                "action": "creation_failed",
+                "record_id": entity_data.get("id", "N/A"),
+                "staging_status": "Success",
+                "crm_status": "Failed",
+                "error": create_response.text,
+                "failed_fields": failed_fields
+            }
 
     except Exception as e:
         logger.error(f"An error occurred while migrating entity data to CRM: {str(e)}")
