@@ -157,7 +157,7 @@
 
         <!-- CRM Link -->
         <div id="crmLinkContainer" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
-            <a id="crmLink" href="#" class="text-blue-500 hover:text-blue-600">Go to CRM Contacts</a>
+            <a id="crmLink" href="#" class="text-blue-500 hover:text-blue-600">Go to CRM entity</a>
         </div>
 
         <!-- Loading Spinner -->
@@ -517,8 +517,36 @@
 
     });
         
+            async function fetchCRMEntityLink(entityName) {
+                try {
+                    const response = await fetch(`/crm-entity-link?entity_name=${entityName}`, {
+                        method: "GET",
+                        headers: {
+                            "Authorization": `Bearer ${localStorage.getItem("access_token")}`, // Assuming you store the token in localStorage
+                            "Content-Type": "application/json"
+                        }
+                    });
+            
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch CRM entity link: ${response.statusText}`);
+                    }
+            
+                    const data = await response.json();
+                    const crmLinkContainer = document.getElementById("crmLinkContainer");
+                    const crmLink = document.getElementById("crmLink");
+            
+                    if (data.crm_entity_link) {
+                        crmLink.href = data.crm_entity_link;
+                        crmLinkContainer.style.display = "block";
+                    } else {
+                        console.error("No CRM entity link found in response");
+                    }
+                } catch (error) {
+                    console.error("Error fetching CRM entity link:", error);
+                }
+            }
 
-        document.getElementById("toggleLogs").addEventListener("click", function() {
+            document.getElementById("toggleLogs").addEventListener("click", function() {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.style.display = logsContainer.style.display === "none" ? "block" : "none";
             this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
@@ -665,7 +693,8 @@
         
                 // Show the migration summary table
                 document.getElementById("migrationSummary").style.display = "block";
-        
+                fetchCRMEntityLink(selectedCrmEntity); 
+
                 // Handle Excel download link
                 if (data.excel_file_url) {
                     const excelLink = document.getElementById("excelLink");
@@ -870,6 +899,8 @@
 
                         logsContainer.innerHTML += columnListHTML;
                         autoScrollLogs();
+                        fetchCRMEntityLink(selectedEntity); 
+
                     } else {
                         logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;
                         autoScrollLogs();

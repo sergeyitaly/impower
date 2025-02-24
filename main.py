@@ -45,6 +45,9 @@ HOST = os.getenv("HOST")
 PORT = os.getenv("PORT")
 DBNAME = os.getenv("DBNAME")
 API_URL = os.getenv("API_URL")
+APP_ID = os.getenv("APP_ID")
+CRM_MAIN_URL = os.getenv("CRM_MAIN_URL")
+
 #FACILIO_EMAIL = os.getenv("FACILIO_EMAIL")
 #FACILIO_PASSWORD = os.getenv("FACILIO_PASSWORD")
 
@@ -300,6 +303,28 @@ def fetch_and_save_entity_data(access_token: str, entity_name: str):
     except Exception as e:
         logger.error(f"Error fetching data for entity {table_name if table_name else entity_name}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
+
+class CRMEntityLinkRequest(BaseModel):
+    entity_name: str
+
+@app.get("/crm-entity-link")
+async def get_crm_entity_link(entity_name: str, authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    access_token = authorization.split("Bearer ")[1]
+    try:
+        # Generate the CRM entity link
+        crm_entity_link = f"{CRM_MAIN_URL}/main.aspx?appid={APP_ID}&pagetype=entitylist&etn={entity_name}"
+        
+        # Return the link in the response
+        return JSONResponse(content={"crm_entity_link": crm_entity_link})
+    except Exception as e:
+        logger.error(f"Error generating CRM entity link: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating CRM entity link: {str(e)}")
+
+
+
 
 @app.post("/facilioo-entities-with-status")
 def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
@@ -1054,25 +1079,29 @@ def extract_record_id_from_error(response):
         logger.error(f"Error extracting record ID from error response: {str(e)}")
         raise ValueError("Failed to parse the error response.")
     
-
-
-def validate_and_convert_guid(value):
+def validate_and_convert_guid(value, entity_name=None):
     try:
         if isinstance(value, str):
             if len(value) == 36 and '-' in value:
-                return str(uuid.UUID(value))  # Validate and return as-is
+                return str(uuid.UUID(value))
             elif len(value) == 32 and all(c in '0123456789abcdefABCDEF' for c in value):
                 return str(uuid.UUID(value))
             else:
-                return None  # Invalid format
+                if entity_name:
+                    namespace = uuid.NAMESPACE_OID
+                    return str(uuid.uuid5(namespace, f"{entity_name}_{value}"))
+                else:
+                    return None
         elif isinstance(value, int):
-            namespace = uuid.NAMESPACE_OID  # Use a fixed namespace for consistency
-            return str(uuid.uuid5(namespace, str(value)))
+            if entity_name:
+                namespace = uuid.NAMESPACE_OID
+                return str(uuid.uuid5(namespace, f"{entity_name}_{value}"))
+            else:
+                return None
         else:
-            return None  # Invalid type
+            return None
     except (ValueError, AttributeError, TypeError):
-        return None
-    
+        return None    
 
 def anonymize_data(data: str, field_type: str) -> str:
     if not data:
@@ -1112,6 +1141,7 @@ def preprocess_field(value):
     return value
 
 
+
 def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str) -> Dict:
     # If matched_fields is a JSON string, parse it to a list
     if isinstance(matched_fields, str):
@@ -1137,7 +1167,8 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             
             # Handle GUID fields (e.g., attributeid)
             if crm_field.lower().endswith('id') and crm_field.lower() != 'id':
-                guid_value = validate_and_convert_guid(field_value)
+                # Generate entity-specific GUID
+                guid_value = validate_and_convert_guid(field_value, selected_crm_entity)
                 if guid_value:
                     crm_data[crm_field] = guid_value
                 else:
@@ -1146,18 +1177,13 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
 
             else:
                 # Anonymize sensitive data based on field type
-                if facilioo_field.lower() in ['name', 'lastname', 'firstname','fullname','email', 'phone','phonenumber']:
+                if facilioo_field.lower() in ['name', 'lastname', 'firstname', 'fullname', 'email', 'phone', 'phonenumber']:
                     anonymized_value = anonymize_data(str(field_value), crm_field.lower())
                     crm_data[crm_field] = anonymized_value
                 else:
-                    if crm_field=='name': 
-                        field_value=field_value[:100]
+                    if crm_field == 'name':
+                        field_value = field_value[:100]  # Truncate name field if necessary
                     crm_data[crm_field] = preprocess_field(field_value)
-                    #crm_data[crm_field] = sanitize_text(field_value)
-
-        else:
-            logger.warning(f"Facilioo field {facilioo_field} not found in entity_data. Skipping field.")
-            failed_fields.append(f"{facilioo_field}-{crm_field}")  # Track failed field pair
     
     logger.info(f"CRM Data being sent: {crm_data}")
 
@@ -1262,7 +1288,6 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             "error": str(e),
             "failed_fields": failed_fields
         }
-
 
 def export_all_entity_to_excel(data: list, entity_name: str) -> str:
     from openpyxl import Workbook
