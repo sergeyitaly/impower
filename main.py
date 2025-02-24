@@ -965,18 +965,11 @@ async def authenticate(request: AuthRequest):
 
 def extract_record_id_from_error(response):
     try:
-        # Assuming the response JSON contains the error details in a structure like:
-        # {"error": {"message": "Conflict", "details": [{"id": "existing_record_id"}]}}
         error_data = response.json()
-        
-        # Check if the error contains the details with the ID
         if "error" in error_data and "details" in error_data["error"]:
             for detail in error_data["error"]["details"]:
-                # Adjust based on the actual structure of your CRM's error response
                 if "id" in detail:
                     return detail["id"]
-        
-        # Fallback if ID is not found, raise an exception
         raise ValueError("Could not extract record ID from error response.")
     except Exception as e:
         logger.error(f"Error extracting record ID from error response: {str(e)}")
@@ -1092,7 +1085,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             else:
                 # Anonymize sensitive data based on field type
                 if facilioo_field.lower() in ['name', 'lastname', 'firstname', 'fullname', 'email', 'phone', 'phonenumber']:
-                    anonymized_value = anonymize_data(str(field_value), crm_field.lower())
+                    anonymized_value = anonymize_data(str(field_value), facilioo_field.lower())
                     crm_data[crm_field] = anonymized_value
                 else:
                     if crm_field == 'name':

@@ -4,14 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dynamics 365 Migration</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/static/ico/favicon.ico">
+    <link rel="apple-touch-icon" sizes="57x57" href="/static/ico/apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="/static/ico/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/static/ico/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="/static/ico/apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/static/ico/apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="/static/ico/apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="/static/ico/apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="/static/ico/apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/ico/apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/ico/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/ico/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/static/ico/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/ico/favicon-16x16.png">
+    <link rel="manifest" href="/static/ico/manifest.json">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="/static/ico/ms-icon-144x144.png">
+    <meta name="theme-color" content="#ffffff">
+
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/css/select2.min.css" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css"> <!-- Link to external styles.css -->
+    <link rel="stylesheet" href="static/style.css"> <!-- Link to external styles.css -->
+
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.0.13/dist/js/select2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="bg-gray-100">
+
     <div class="container mx-auto p-4">
         <h1 class="text-3xl font-bold text-center mb-8">Facillio.de → Dynamics 365 Migration</h1>
 
@@ -150,14 +176,14 @@
 
         <!-- Excel Download Link -->
         <div id="excelDownload" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
-            <a id="excelLink" href="#" download class="text-blue-500 hover:text-blue-600">
-                <i class="fas fa-file-excel"></i> Download Excel Export
+            <a id="excelLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">
+                <i class="fas fa-file-excel"></i> View Excel Export
             </a>
         </div>
 
         <!-- CRM Link -->
         <div id="crmLinkContainer" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
-            <a id="crmLink" href="#" class="text-blue-500 hover:text-blue-600">Go to CRM entity</a>
+            <a id="crmLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">Go to CRM entity</a>
         </div>
 
         <!-- Loading Spinner -->
