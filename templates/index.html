@@ -617,19 +617,22 @@
         
                     // Log the current record being processed
                     logsContainer.innerHTML += `
-                        <p>
-                            <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
-                            <br>
-                            <strong>Record ID:</strong> ${result.record_id} <br>
-                            <strong>Staging Status:</strong> ${result.staging_status} <br>
-                            <strong>CRM Status:</strong> ${result.crm_status} <br>
-                            <strong>Action:</strong> ${result.action || "none"} <br>
-                            ${result.error ? `<strong>Error:</strong> ${result.error}` : ""}
-                            ${result.failed_fields ? `<strong>Failed Fields:</strong> ${result.failed_fields.join(", ")}` : ""}
-                        </p>
-                    `;
+                    <p>
+                        <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
+                        <br>
+                        <strong>Record ID:</strong> ${result.record_id || "N/A"} <br>
+                        <strong>Staging Status:</strong> ${result.staging_status || "N/A"} <br>
+                        <strong>CRM Status:</strong> ${result.crm_status || "N/A"} <br>
+                        <strong>Action:</strong> ${result.action || "none"} <br>
+                        <strong style="color: red;">Error:</strong> ${result.error ? `<span style="color: red;">${result.error}</span>` : "none"} <br>
+                        <strong style="color: orange;">Failed Fields:</strong> ${Array.isArray(result.failed_fields) && result.failed_fields.length 
+                            ? `<span style="color: orange;">${result.failed_fields.join(", ")}</span>` 
+                            : "none"} <br>
+                    </p>
+                `;
+                
                     autoScrollLogs();
-                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+                    await new Promise(resolve => setTimeout(resolve, 10)); // 100ms delay
                 }
         
                 // Log migration summary
