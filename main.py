@@ -433,38 +433,6 @@ async def fetch_entity_fields(entity_name: str, authorization: str = Header(None
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching entity fields: {str(e)}")
 
-
-def anonymize_field(field_type: str, data: str) -> str:
-    if data is None or not isinstance(data, str) or not data.strip():
-        # Return a default anonymized value for invalid or missing data
-        return "***"
-
-    if field_type == 'name':
-        # Show the first 2 characters and anonymize the rest
-        return data[:2] + "***" if len(data) > 2 else data + "***"
-    
-    elif field_type == 'email':
-        # Anonymize the email by showing the first part and masking the domain
-        if '@' in data:
-            local_part, domain = data.split('@', 1)
-            return local_part[:2] + "***@" + "***"
-        else:
-            # Handle invalid email format
-            return "***"
-    
-    elif field_type == 'phone':
-        # Show the last 4 digits and anonymize the rest
-        if len(data) >= 4:
-            return "***" + data[-4:]
-        else:
-            # Handle short phone numbers
-            return "***"
-    
-    else:
-        # Default case: anonymize the entire field
-        return "***"
-
-
 def fetch_all_entity_data_from_staging(db: Session, entity_name: str) -> list:
     logger.info(f"Fetching all data from staging for entity: {entity_name}")
 
@@ -994,71 +962,6 @@ async def authenticate(request: AuthRequest):
         logger.error(f"Error during authentication: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    
-
-
-def anonymize_data(data: str, field_type: str) -> str:
-    if not data:
-        return data
-
-    if field_type == 'name':
-        # Show the first 2 characters and anonymize the rest
-        return data[:2] + "***" if len(data) > 2 else data + "***"
-    
-    elif field_type == 'lastname':
-        # Show the last 2 characters and anonymize the rest
-        return "***" + data[-2:] if len(data) > 2 else "***" + data
-    
-    elif field_type == 'email':
-        # Show the first 3 characters of the local part and the domain
-        local, domain = data.split('@') if '@' in data else (data, "")
-        return local[:3] + "***@" + domain if domain else local[:3] + "***"
-    
-    elif field_type == 'phone':
-        # Show the first 4 characters and anonymize the rest
-        return data[:4] + "****" if len(data) > 4 else data + "****"
-
-    return data
-
-
-
-# Function to fetch user data from the staging DB
-def get_user_from_db(user_id: int):
-    db: Session = SessionLocal()
-    try:
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            return {
-                "id": user.id,
-                "name": user.name,
-                "lastname": user.lastname,
-                "email": user.email,
-                "phone": user.phone
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        return None
-    finally:
-        db.close()
-
-def get_users_from_db():
-    db: Session = SessionLocal()
-    try:
-        users = db.query(User).all()  # Fetch all users
-        return [{"id": user.id, "name": user.name,  "lastname": user.lastname, "email": user.email, "phone": user.phone} for user in users]
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        return []
-    finally:
-        db.close()
-
-@app.get("/users")
-async def get_users():
-    users = get_users_from_db()
-    if not users:
-        raise HTTPException(status_code=404, detail="No users found in the staging database")
-    return users
 
 def extract_record_id_from_error(response):
     try:
@@ -1115,6 +1018,14 @@ def anonymize_data(data: str, field_type: str) -> str:
         # Show the last 2 characters and anonymize the rest
         return "***" + data[-2:] if len(data) > 2 else "***" + data
     
+    elif field_type == 'firstname':
+        # Show the last 2 characters and anonymize the rest
+        return "***" + data[-2:] if len(data) > 2 else "***" + data
+
+    elif field_type == 'fullname':
+        # Show the last 2 characters and anonymize the rest
+        return "***" + data[-2:] if len(data) > 2 else "***" + data
+        
     elif field_type == 'email':
         # Show the first 3 characters of the local part and the domain
         local, domain = data.split('@') if '@' in data else (data, "")
@@ -1123,7 +1034,10 @@ def anonymize_data(data: str, field_type: str) -> str:
     elif field_type == 'phone':
         # Show the first 4 characters and anonymize the rest
         return data[:4] + "****" if len(data) > 4 else data + "****"
-
+    
+    elif field_type == 'phonenumber':
+        # Show the first 4 characters and anonymize the rest
+        return data[:4] + "****" if len(data) > 4 else data + "****"
     return data
 
 def sanitize_text(value: str) -> str:
@@ -1385,13 +1299,18 @@ def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -
                 if isinstance(crm_field, str):
                     if 'email' in crm_field.lower():
                         field_type = 'email'
-                    elif 'name' in crm_field.lower() and 'last' not in crm_field.lower():
+                    elif 'name' in crm_field.lower():
                         field_type = 'name'
                     elif 'lastname' in crm_field.lower():
                         field_type = 'lastname'
+                    elif 'fullname' in crm_field.lower():
+                        field_type = 'fullname'
+                    elif 'firstname' in crm_field.lower():
+                        field_type = 'firstname'
                     elif 'phone' in crm_field.lower():
                         field_type = 'phone'
-
+                    elif 'phonenumber' in crm_field.lower():
+                        field_type = 'phonenumber'
                 if field_type:
                     anonymized_row[crm_field] = anonymize_data(value, field_type)
                 else:
