@@ -442,39 +442,42 @@
                                 uniqueCrmFields.push(crmField);
                             }
                         });
-            
-                        // Render the table
-                        let tableHtml = `<table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.2;">
-                                            <tr>
-                                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
-                                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
-                                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
-                                            </tr>`;
-            
-                        const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
-                        for (let i = 0; i < maxLength; i++) {
-                            tableHtml += "<tr>";
-                            const faciliooField = uniqueFaciliooFields[i];
-                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd;">${
-                                faciliooField ? `<span style="color: magenta;">✘ ${faciliooField}</span>` : ''
-                            }</td>`;
-                            const crmField = uniqueCrmFields[i];
-                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd;">${
-                                crmField ? `<span style="color: blue;">✘ ${crmField}</span>` : ''
-                            }</td>`;
-                            const matchedField = matchedFields[i];
-                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd;">${
-                                matchedField ?
-                                    (matchedField.isExactMatch ?
-                                        `<span style="color: green; font-weight: bold;">✔ ${matchedField.faciliooField}</span>` :
-                                        `<span style="color: magenta;">${matchedField.faciliooField}</span> - <span style="color: blue;">${matchedField.crmField}</span>`) :
-                                    ''
-                            }</td>`;
-                            tableHtml += "</tr>";
-                        }
-                        tableHtml += "</table>";
-                        logsContainer.innerHTML += tableHtml;
-                        autoScrollLogs();
+                        let tableHtml = `
+                        <table style="width: 100%; border-collapse: collapse; table-layout: auto; font-size: 12px; line-height: 1.2; word-wrap: break-word;">
+                            <tr>
+                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
+                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
+                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
+                            </tr>
+                    `;
+                    
+                    // Example rows (replace with your actual data)
+                    const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
+                    for (let i = 0; i < maxLength; i++) {
+                        tableHtml += `
+                            <tr>
+                                <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
+                                    ${uniqueFaciliooFields[i] ? `<span style="color: magenta;">✘ ${uniqueFaciliooFields[i]}</span>` : ''}
+                                </td>
+                                <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
+                                    ${uniqueCrmFields[i] ? `<span style="color: blue;">✘ ${uniqueCrmFields[i]}</span>` : ''}
+                                </td>
+                                <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
+                                    ${matchedFields[i] ? 
+                                        (matchedFields[i].isExactMatch ? 
+                                            `<span style="color: green; font-weight: bold;">✔ ${matchedFields[i].faciliooField}</span>` : 
+                                            `<span style="color: magenta;">${matchedFields[i].faciliooField}</span> - <span style="color: blue;">${matchedFields[i].crmField}</span>`) : 
+                                        ''}
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    
+                    tableHtml += `</table>`;
+                    
+                    // Append the table to the logsContainer
+                    logsContainer.innerHTML += tableHtml;
+                    autoScrollLogs();
             
                         // Populate the dropdown with all possible field pairs
                         const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
