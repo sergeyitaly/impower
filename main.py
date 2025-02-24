@@ -1146,7 +1146,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
 
             else:
                 # Anonymize sensitive data based on field type
-                if facilioo_field.lower() in ['name', 'lastname', 'email', 'phone']:
+                if facilioo_field.lower() in ['name', 'lastname', 'firstname','fullname','email', 'phone','phonenumber']:
                     anonymized_value = anonymize_data(str(field_value), crm_field.lower())
                     crm_data[crm_field] = anonymized_value
                 else:
@@ -1301,9 +1301,14 @@ def export_all_entity_to_excel(data: list, entity_name: str) -> str:
                 field_type = 'name'
             elif 'lastname' in field_name.lower():
                 field_type = 'lastname'
+            elif 'fullname' in field_name.lower():
+                field_type = 'fullname'
+            elif 'firstname' in field_name.lower():
+                field_type = 'firstname'
             elif 'phone' in field_name.lower():
                 field_type = 'phone'
-
+            elif 'phonenumber' in field_name.lower():
+                field_type = 'phonenumber'
             if field_type:
                 anonymized_row[field_name] = anonymize_data(value, field_type)
             else:
