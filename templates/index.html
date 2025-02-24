@@ -349,12 +349,14 @@
                     alert("Please select both Facilioo and CRM entities.");
                     return;
                 }
+            
                 const logsContainer = document.getElementById("logsContainer");
                 logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
                 autoScrollLogs();
                 logsContainer.style.display = "block";
                 document.getElementById("migrationSummary").style.display = "none";
                 showLoadingSpinner();
+            
                 try {
                     // Fetch entity fields and matched fields
                     const [faciliooResponse, crmResponse, matchedFieldsResponse] = await Promise.all([
@@ -364,7 +366,7 @@
                                 "Authorization": `Bearer ${accessToken}`,
                                 "Content-Type": "application/json",
                             },
-                            body: JSON.stringify({ entity_name: selectedFaciliooEntity })
+                            body: JSON.stringify({ entity_name: selectedFaciliooEntity }),
                         }),
                         fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
                             method: "GET",
@@ -403,12 +405,23 @@
                         const matchedFields = [];
                         const uniqueFaciliooFields = [];
                         const uniqueCrmFields = [];
-
+            
+                        // Generate all possible combinations
+                        const allCombinations = [];
+                        faciliooFields.forEach(faciliooField => {
+                            crmFields.forEach(crmField => {
+                                allCombinations.push({
+                                    faciliooField,
+                                    crmField,
+                                    isExactMatch: faciliooField.toLowerCase() === crmField.toLowerCase(),
+                                });
+                            });
+                        });
+            
                         faciliooFields.forEach(faciliooField => {
                             let isMatched = false;
                             crmFields.forEach(crmField => {
                                 if (faciliooField.toLowerCase() === crmField.toLowerCase()) {
-                                    // 100% match
                                     matchedFields.push({ faciliooField, crmField, isExactMatch: true });
                                     isMatched = true;
                                 } else if (isEntirelyPartOf(faciliooField, crmField)) {
@@ -417,43 +430,44 @@
                                 }
                             });
                             if (!isMatched) {
-                                uniqueFaciliooFields.push(faciliooField); // Unique to Facilioo
+                                uniqueFaciliooFields.push(faciliooField);
                             }
                         });
             
                         crmFields.forEach(crmField => {
-                            if (!faciliooFields.some(faciliooField => 
-                                faciliooField.toLowerCase() === crmField.toLowerCase() || 
+                            if (!faciliooFields.some(faciliooField =>
+                                faciliooField.toLowerCase() === crmField.toLowerCase() ||
                                 isEntirelyPartOf(faciliooField, crmField))
                             ) {
                                 uniqueCrmFields.push(crmField);
                             }
                         });
             
-                        // Render the table (unchanged)
+                        // Render the table
                         let tableHtml = `<table style="width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; line-height: 1.2;">
                                             <tr>
                                                 <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
                                                 <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
                                                 <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
                                             </tr>`;
+            
                         const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
                         for (let i = 0; i < maxLength; i++) {
                             tableHtml += "<tr>";
                             const faciliooField = uniqueFaciliooFields[i];
-                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
+                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd;">${
                                 faciliooField ? `<span style="color: magenta;">✘ ${faciliooField}</span>` : ''
                             }</td>`;
                             const crmField = uniqueCrmFields[i];
-                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
+                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd;">${
                                 crmField ? `<span style="color: blue;">✘ ${crmField}</span>` : ''
                             }</td>`;
                             const matchedField = matchedFields[i];
-                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd; overflow: hidden; text-overflow: ellipsis;">${
-                                matchedField ? 
-                                    (matchedField.isExactMatch ? 
-                                        `<span style="color: green; font-weight: bold;">✔ ${matchedField.faciliooField}</span>` : 
-                                        `<span style="color: magenta;">${matchedField.faciliooField}</span> - <span style="color: blue;">${matchedField.crmField}</span>`) : 
+                            tableHtml += `<td style="padding: 4px; border: 1px solid #ddd;">${
+                                matchedField ?
+                                    (matchedField.isExactMatch ?
+                                        `<span style="color: green; font-weight: bold;">✔ ${matchedField.faciliooField}</span>` :
+                                        `<span style="color: magenta;">${matchedField.faciliooField}</span> - <span style="color: blue;">${matchedField.crmField}</span>`) :
                                     ''
                             }</td>`;
                             tableHtml += "</tr>";
@@ -461,34 +475,25 @@
                         tableHtml += "</table>";
                         logsContainer.innerHTML += tableHtml;
                         autoScrollLogs();
-
-                        // Populate the dropdown with matched fields
-                        const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
-                        matchedFieldsDropdown.innerHTML = ""; // Clear existing options
-                        matchedFields.forEach(matchedField => {
-                            const option = document.createElement("option");
-                            option.value = `${matchedField.faciliooField}-${matchedField.crmField}`;
-                            option.textContent = matchedField.isExactMatch ? 
-                                `✔ ${matchedField.faciliooField}` : 
-                                `${matchedField.faciliooField} - ${matchedField.crmField}`;
             
-                            // Mark the option as selected if it exists in the existingMatchedFields
-                            if (existingMatchedFields.includes(`${matchedField.faciliooField}-${matchedField.crmField}`)) {
+                        // Populate the dropdown with all possible field pairs
+                        const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
+                        matchedFieldsDropdown.innerHTML = "";
+            
+                        allCombinations.forEach(combination => {
+                            const option = document.createElement("option");
+                            option.value = `${combination.faciliooField}-${combination.crmField}`;
+                            option.textContent = combination.isExactMatch ?
+                                `✔ ${combination.faciliooField}` :
+                                `${combination.faciliooField} - ${combination.crmField}`;
+                            if (existingMatchedFields.includes(`${combination.faciliooField}-${combination.crmField}`)) {
                                 option.selected = true;
                             }
-            
-                            //matchedFieldsDropdown.appendChild(option);
                             matchedFieldsDropdown.prepend(option);
-
                         });
             
-                        // Show the dropdown container only if there are matched fields
-                        const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
-                        if (matchedFields.length > 0) {
-                            matchedFieldsDropdownContainer.style.display = "block";
-                        } else {
-                            matchedFieldsDropdownContainer.style.display = "none";
-                        }
+                        document.getElementById("matchedFieldsDropdownContainer").style.display = matchedFields.length > 0 ? "block" : "none";
+            
                     } else {
                         logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch entity fields.</p>`;
                         autoScrollLogs();
@@ -499,8 +504,8 @@
                     autoScrollLogs();
                 }
                 hideLoadingSpinner();
-            });        
-        
+            });
+                    
 
 
 
