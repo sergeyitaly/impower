@@ -277,13 +277,7 @@
             });
                         
 
-            $("#entitySelectCRM").on("change", function () {
-                const selectedCrmEntity = $(this).val(); // Get the selected CRM entity
-                if (selectedCrmEntity) {
-                    fetchCRMEntityLink(selectedCrmEntity); // Call the function with selected value
-                }
-            });
-            
+
             async function fetchAndDisplayMatchingFields() {
                 const selectedFaciliooEntity = $("#entitySelect").val();
                 const selectedCrmEntity = $("#entitySelectCRM").val();
@@ -371,10 +365,13 @@
             }
             
             $("#entitySelect, #entitySelectCRM").on("change", fetchAndDisplayMatchingFields);
-
-
-            fetchCRMEntityLink(selectedCrmEntity); 
-
+            $("#entitySelectCRM").on("change", function () {
+                const selectedCrmEntity = $(this).val(); // Get the selected CRM entity
+                if (selectedCrmEntity) {
+                    fetchCRMEntityLink(selectedCrmEntity); // Call the function with selected value
+                }
+            });
+            
             document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
                 const faciliooEntitySelect = document.getElementById("entitySelect");
                 const crmEntitySelect = document.getElementById("entitySelectCRM");
