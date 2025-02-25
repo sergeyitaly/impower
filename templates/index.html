@@ -206,7 +206,8 @@
             $("#matchedFieldsDropdown").select2({
                 placeholder: "Select matched fields",
                 allowClear: true,
-                width: "50%"
+                //width: "50%"
+                width: "resolve"  
             });
 
             $("#matchedFieldsDropdown").on("change", function () {
@@ -276,7 +277,13 @@
             });
                         
 
-
+            $("#entitySelectCRM").on("change", function () {
+                const selectedCrmEntity = $(this).val(); // Get the selected CRM entity
+                if (selectedCrmEntity) {
+                    fetchCRMEntityLink(selectedCrmEntity); // Call the function with selected value
+                }
+            });
+            
             async function fetchAndDisplayMatchingFields() {
                 const selectedFaciliooEntity = $("#entitySelect").val();
                 const selectedCrmEntity = $("#entitySelectCRM").val();
@@ -364,6 +371,9 @@
             }
             
             $("#entitySelect, #entitySelectCRM").on("change", fetchAndDisplayMatchingFields);
+
+
+            fetchCRMEntityLink(selectedCrmEntity); 
 
             document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
                 const faciliooEntitySelect = document.getElementById("entitySelect");
@@ -719,15 +729,13 @@
         
                 // Show the migration summary table
                 document.getElementById("migrationSummary").style.display = "block";
-                fetchCRMEntityLink(selectedCrmEntity); 
-
                 // Handle Excel download link
                 if (data.excel_file_url) {
                     const excelLink = document.getElementById("excelLink");
                     excelLink.href = data.excel_file_url;
                     document.getElementById("excelDownload").style.display = "block";
                 }
-        
+
                 // Update migration status message
                 if (data.error_count === 0) {
                     document.getElementById("migrationMessage").textContent = "Complete";
@@ -925,7 +933,6 @@
 
                         logsContainer.innerHTML += columnListHTML;
                         autoScrollLogs();
-                        fetchCRMEntityLink(selectedEntity); 
 
                     } else {
                         logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;

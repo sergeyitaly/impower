@@ -264,8 +264,12 @@ input:focus {
     background: #0044cc;
 }
 
+
 /* Mobile Responsiveness */
 @media (max-width: 640px) {
+    .select2-container {
+        width: 100% !important;  /* Makes dropdown take full width */
+    }
     #entityControls {
         flex-direction: column;
         gap: 6px;
@@ -275,10 +279,6 @@ input:focus {
         max-width: 100%;
         padding: 10px;
     }
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 640px) {
     .container {
         padding: 12px;
     }
@@ -344,11 +344,11 @@ input:focus {
 .crm-only {
     color: blue;
 }
-
+/*
 .select2-selection__choice {
     background-color: yellow !important; /* Ensures selected item gets yellow */
-    color: black !important; /* Ensures text is readable */
-}
+   /* color: black !important; /* Ensures text is readable */
+/*} */
 
 @keyframes spin {
     0% { transform: rotate(0deg); }
