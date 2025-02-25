@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 import logging
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Any
 import httpx
 from urllib.parse import quote
 from fastapi.responses import FileResponse
@@ -31,7 +31,7 @@ import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Generator
-
+import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -370,13 +370,138 @@ def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
     #logger.info(f"Final entities_with_status: {entities_with_status}")
     return entities_with_status
 
+class ExportEntityRequest(BaseModel):
+    entity_name: str
+
+
+
+
+
+
+
+def create_sample_record(schema: List[Column]) -> Dict[str, Any]:
+    sample_record = {}
+    for column in schema:
+        if column.type.python_type == str:
+            sample_record[column.name] = ""
+        elif column.type.python_type == int:
+            sample_record[column.name] = 0
+        elif column.type.python_type == float:
+            sample_record[column.name] = 0.0
+        elif column.type.python_type == bool:
+            sample_record[column.name] = False
+        elif column.type.python_type == dict or column.type.python_type == list:
+            sample_record[column.name] = {}
+        elif column.type.python_type == datetime:
+            sample_record[column.name] = datetime.now()
+        else:
+            sample_record[column.name] = None
+    return sample_record
+
+
+def fetch_single_entity_data(access_token: str, entity_name: str, limit: int = 10) -> List[Dict[str, Any]]:
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "accept": "application/json",
+        "api-version": "1.0",
+    }
+    try:
+        response = requests.get(
+            f"{API_URL}/api/{entity_name}",
+            headers=headers,
+            params={"PageSize": limit, "PageNumber": 1, "AscendingOrder": True},
+        )
+        if response.status_code != 200:
+            logger.error(f"Failed to fetch data for entity {entity_name}: {response.text}")
+            return []
+        return response.json().get("items", [])
+    except Exception as e:
+        logger.error(f"Error fetching data for entity {entity_name}: {str(e)}")
+        return []
+
+
 
 class ExportRequest(BaseModel):
-    entity_name: str
+    access_token: str
+
+@app.post("/fetch-and-export_all_entities/")
+def fetch_and_export_entity_data(
+    request: ExportRequest,  # Use the Pydantic model for request validation
+    background_tasks: BackgroundTasks = None,
+):
+    try:
+        access_token = request.access_token
+        all_data = {}
+
+        for entity in FACILIOO_ENTITIES:
+            logger.info(f"Fetching data for entity: {entity}")
+            data = fetch_single_entity_data(access_token, entity)
+            if data:
+                anonymized_records = []
+                for record in data:
+                    anonymized_record = {}
+                    for field_name, field_value in record.items():
+                        # Check if the field name is in the list of fields to anonymize
+                        if field_name.lower() in ['name', 'lastname', 'firstname', 'fullname', 'email', 'phone', 'phonenumber']:
+                            anonymized_record[field_name] = anonymize_data(str(field_value), field_name.lower())
+                        else:
+                            anonymized_record[field_name] = field_value  # Keep the original value
+                    anonymized_records.append(anonymized_record)
+                all_data[entity] = anonymized_records
+            else:
+                # If no data, infer the schema from a sample record
+                logger.info(f"No data found for entity {entity}. Inferring schema.")
+                sample_record = {"id": 1, "name": "default", "created_at": datetime.now()}  # Example default columns
+                schema = infer_schema_from_record(sample_record)
+                if schema:
+                    all_data[entity] = [create_sample_record(schema)]
+                else:
+                    all_data[entity] = []
+
+        # Export data to Excel
+        excel_file_path = export_all_entities_to_excel(all_data, "facilioo_export")
+        if background_tasks:
+            background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
+        logger.info(f"Data exported to Excel file: {excel_file_path}")
+
+        return {
+            "success": True,
+            "columns": list(all_data.keys()) if all_data else [],
+            "total_records": sum(len(data) for data in all_data.values()),
+            "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
+        }
+    except Exception as e:
+        logger.error(f"Failed to export data to Excel: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
+    
+
+def export_all_entities_to_excel(data: Dict[str, List[Dict[str, Any]]], entity_name: str) -> str:
+    try:
+        # Create a Pandas Excel writer
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        excel_file_path = f"{entity_name}_export_{timestamp}.xlsx"
+        with pd.ExcelWriter(excel_file_path, engine="openpyxl") as writer:
+            for entity, records in data.items():
+                if records:
+                    df = pd.DataFrame(records)
+                    df.to_excel(writer, sheet_name=entity, index=False)
+                else:
+                    # If no data, create an empty DataFrame with the schema as headers
+                    sample_record = {"id": 1, "name": "default", "created_at": datetime.now()}  # Example default columns
+                    schema = infer_schema_from_record(sample_record)
+                    if schema:
+                        df = pd.DataFrame(columns=[col.name for col in schema])
+                        df.to_excel(writer, sheet_name=entity, index=False)
+        logger.info(f"Data exported to Excel file: {excel_file_path}")
+        return excel_file_path
+    except Exception as e:
+        logger.error(f"Error exporting data to Excel: {str(e)}")
+        raise
+
 
 @app.post("/fetch-and-export/")
 def fetch_and_export_entity_data(
-    request: ExportRequest,  # Use the Pydantic model for request validation
+    request: ExportEntityRequest,  # Use the Pydantic model for request validation
     db: Session = Depends(get_db),
     background_tasks: BackgroundTasks = None,
 ):
