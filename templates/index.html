@@ -796,45 +796,59 @@
                 alert(`Authentication failed: ${error.message}`);
             } finally {hideLoadingSpinner();}
         });
-
-       async function fetchAndPopulateCrmEntities() {
-        try {
-            const response = await fetch("/crm-entities", {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "Content-Type": "application/json"
+        async function fetchAndPopulateCrmEntities() {
+            try {
+                // Fetch CRM entities from the backend
+                const response = await fetch("/getfromdb-crm-entities", {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json"
+                    }
+                });
+        
+                // Check if the response is OK
+                if (!response.ok) {
+                    throw new Error("Failed to fetch CRM entities");
                 }
-            });
-
-            if (!response.ok) {
-                throw new Error("Failed to fetch CRM entities");}
-            const data = await response.json();
-            if (!data.entities || !Array.isArray(data.entities)) {throw new Error("Invalid API response format");}
-            const entitySelectCRM = document.getElementById("entitySelectCRM");
-            entitySelectCRM.innerHTML = '<option value="">-- Select a CRM Entity --</option>';
-            data.entities.forEach(entity => {
-                const option = document.createElement("option");
-                option.value = entity;
-                option.textContent = entity.replace(/-/g, " "); // Replace hyphens with spaces
-                entitySelectCRM.appendChild(option);
-            });
-            console.log("CRM entities loaded successfully.");
-        } catch (error) {
-            console.error("Error fetching CRM entities:", error);
-            alert("Failed to fetch CRM entities. Please try again.");
+        
+                // Parse the response JSON
+                const data = await response.json();
+        
+                // Validate the response structure
+                if (!Array.isArray(data)) {
+                    throw new Error("Invalid API response format");
+                }
+        
+                // Get the dropdown element
+                const entitySelectCRM = document.getElementById("entitySelectCRM");
+        
+                // Clear existing options
+                entitySelectCRM.innerHTML = '<option value="">-- Select a CRM Entity --</option>';
+        
+                // Populate the dropdown with CRM entities
+                data.forEach(entity => {
+                    const option = document.createElement("option");
+                    option.value = entity.entity_name; // Use entity_name as the value
+                    option.textContent = entity.entity_name.replace(/-/g, " "); // Replace hyphens with spaces for display
+                    if (!entity.is_active) {
+                        option.disabled = true; // Disable the option if the entity is not active
+                    }
+                    entitySelectCRM.appendChild(option);
+                });
+        
+                console.log("CRM entities loaded successfully.");
+            } catch (error) {
+                console.error("Error fetching CRM entities:", error);
+                alert("Failed to fetch CRM entities. Please try again.");
+            }
         }
-    }
+    
+    
+    document.addEventListener("DOMContentLoaded", () => {if (accessToken) {fetchAndPopulateCrmEntities()}});
+    document.addEventListener("DOMContentLoaded", () => {if (accessToken) {populateEntityDropdown();}});   
 
-    
-    
-    document.addEventListener("DOMContentLoaded", () => {
-            if (accessToken) {fetchAndPopulateCrmEntities()}
-        });
-        document.addEventListener("DOMContentLoaded", () => {
-            if (accessToken) {populateEntityDropdown();}
-        });    
-        async function populateEntityDropdown() {
+    async function populateEntityDropdown() {
             try {
                 const response = await fetch("/get-facilioo-entities-with-status", {
                     method: "GET",
@@ -843,9 +857,7 @@
                         "Content-Type": "application/json",
                     },
                 });
-                if (!response.ok) {
-                    throw new Error("Failed to fetch entities list");
-                }
+                if (!response.ok) {throw new Error("Failed to fetch entities list");}
                 const entities = await response.json();
                 const entitySelect = document.getElementById("entitySelect");
                 document.getElementById("migrationSummary").style.display = "none";
@@ -854,9 +866,7 @@
                     const option = document.createElement("option");
                     option.value = entity.entity_name;
                     option.textContent = entity.entity_name.replace(/-/g, " ");
-                    if (!entity.has_data) {
-                        option.disabled = true;  // Disable the option so it cannot be selected
-                    }
+                    if (!entity.has_data) {option.disabled = true;}
                     entitySelect.appendChild(option);
                 });
             } catch (error) {
@@ -868,19 +878,14 @@
         async function fetchEntitiesList() {
             try {
                 const response = await fetch("/facilioo-entities");
-                if (!response.ok) {
-                    throw new Error("Failed to fetch entities list");
-                }
+                if (!response.ok) {throw new Error("Failed to fetch entities list");}
                 const entities = await response.json();
                 return entities;
             } catch (error) {
                 console.error("Error fetching entities list:", error);
                 return []; // Return an empty array or handle the error as needed
             }
-
         }
-
-
 
             document.getElementById("fetchEntityBtnCRM").addEventListener("click", async () => {
                 const entitySelect = document.getElementById("entitySelectCRM");
@@ -903,30 +908,20 @@
                             "Content-Type": "application/json",
                         },
                     });
-
-                    if (!response.ok) {
-                        throw new Error("Failed to fetch CRM entity fields");
-                    }
-
+                    if (!response.ok) {throw new Error("Failed to fetch CRM entity fields");}
                     const data = await response.json();
-
                     if (data.success) {
                         logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
-
                         // Build the formatted list of columns with mandatory fields highlighted
                         let columnListHTML = "<ul>";
                         data.columns.forEach(column => {
                             if (column.mandatory) {
                                 columnListHTML += `<li style="color: red;">${column.name} *</li>`; // Red color for required fields
-                            } else {
-                                columnListHTML += `<li>${column.name}</li>`;
-                            }
+                            } else {columnListHTML += `<li>${column.name}</li>`;}
                         });
                         columnListHTML += "</ul>";
-
                         logsContainer.innerHTML += columnListHTML;
                         autoScrollLogs();
-
                     } else {
                         logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch columns for ${selectedEntity}.</p>`;
                         autoScrollLogs();
@@ -937,8 +932,6 @@
                     autoScrollLogs();
                 }
             });
-
-
                 
         // Fetch data for the selected entity
         async function fetchEntityData(entityName) {
@@ -954,7 +947,6 @@
                 const data = await response.json();return data;
             } catch (error) {console.error("Error fetching entity data:", error);throw error;}
         }
-
             // Event listener for the "Fetch Entity Data" button
             document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
                 const entitySelect = document.getElementById("entitySelect");
@@ -965,32 +957,26 @@
                     alert("Please select an entity.");
                     return;
                 }
-
                 showLoadingSpinner();
                 logsContainer.innerHTML = "";
                 logsContainer.style.display = "block";
                 document.getElementById("migrationSummary").style.display = "none";
-
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for entity: ${selectedEntity}...</p>`;
                 autoScrollLogs();
-
                 try {
                     // Real-time progress tracking for fetching data
                     document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}...`;
                     document.getElementById("fetchingProgress").style.width = "0%";
-
                     const eventSource = new EventSource(`/stream-progress?entity_name=${selectedEntity}`);
                     eventSource.onmessage = function (event) {
                         const progress = parseInt(event.data);
                         document.getElementById("fetchingProgress").style.width = `${progress}%`;
                         document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}... ${progress}%`;
-
                         if (progress === 100) {
                             eventSource.close();
                             logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Data fetched successfully for ${selectedEntity}.</p>`;
                             autoScrollLogs();
                             fetchTotalRows(selectedEntity);
-
                             setTimeout(() => {
                                 document.getElementById("fetchingProgress").style.width = "0%";
                                 document.getElementById("fetchingMessage").textContent = "Not Started";
@@ -1059,8 +1045,11 @@
 
             let clickCount = 0;
             let clickCount2 = 0;
+            let clickCount3 = 0;
+
             const maxClicksForExport = 3;
             const maxClicksForStatusUpdate = 4;
+            const maxClicksForCRMList=5;
             const clickableHeading = document.getElementById("clickableHeading");
             const logsContainer = document.getElementById("logsContainer");
             
@@ -1071,43 +1060,26 @@
                 logsContainer.appendChild(logEntry);
                 autoScrollLogs();
             }
-            
             // Function to update the progress bar
             function updateProgress(percentage) {
                 document.getElementById("fetchingProgress").style.width = `${percentage}%`;
-            }
-            
+            }            
             // Function to fetch and download the Excel file
             async function fetchAndDownloadExcel() {
                 try {
-                    addLog("Starting the download process...");
-                    updateProgress(10);
-            
+                    addLog("Starting the download process...");updateProgress(10);
                     const response = await fetch("/fetch-and-export_all_entities/", {
                         method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
+                        headers: {"Content-Type": "application/json",},
                         body: JSON.stringify({ access_token: accessToken }),
                     });
-            
-                    if (!response.ok) {
-                        throw new Error("Failed to fetch Excel file.");
-                    }
-            
+                    if (!response.ok) {throw new Error("Failed to fetch Excel file.");}
                     const data = await response.json();
-                    addLog("Excel file generated successfully.");
-                    updateProgress(50);
-            
+                    addLog("Excel file generated successfully.");updateProgress(50);
                     const excelFileUrl = data.excel_file_url;
-                    addLog(`Downloading Excel file from: ${excelFileUrl}`);
-                    updateProgress(75);
-            
+                    addLog(`Downloading Excel file from: ${excelFileUrl}`);updateProgress(75);
                     const downloadResponse = await fetch(excelFileUrl);
-                    if (!downloadResponse.ok) {
-                        throw new Error("Failed to download Excel file.");
-                    }
-            
+                    if (!downloadResponse.ok) {throw new Error("Failed to download Excel file.");}
                     const blob = await downloadResponse.blob();
                     const downloadLink = document.createElement("a");
                     downloadLink.href = URL.createObjectURL(blob);
@@ -1115,34 +1087,54 @@
                     document.body.appendChild(downloadLink);
                     downloadLink.click();
                     document.body.removeChild(downloadLink);
-            
-                    addLog("Excel file downloaded successfully.");
-                    updateProgress(100);
-                } catch (error) {
-                    addLog(`Error: ${error.message}`);
-                    updateProgress(0);
-                }
+                    addLog("Excel file downloaded successfully.");updateProgress(100);
+                } catch (error) {addLog(`Error: ${error.message}`);updateProgress(0);}
             }
             
             // Function to update facilioo_entities_with_status table
             async function updateFaciliooEntitiesStatus() {
                 try {
-                    addLog("Updating facilioo_entities_with_status...");
+                    addLog("Updating facilioo_entities_with_status...");updateProgress(10);
+                    const response = await fetch("/facilioo-entities-with-status", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json",},
+                        body: JSON.stringify({ access_token: accessToken }),
+                    });
+                    if (!response.ok) {throw new Error("Failed to update entity status.");}
+                    addLog("facilioo_entities_with_status updated successfully.");
+                    await populateEntityDropdown();updateProgress(100);
+                } catch (error) {
+                    addLog(`Error: ${error.message}`);updateProgress(0);
+                }
+            }
+            
+            async function updateCRMEntitiesList() {
+                try {
+                    addLog("Updating crm_entities...");
                     updateProgress(10);
             
-                    const response = await fetch("/facilioo-entities-with-status", {
+                    const response = await fetch("/crm-entities-table-save", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ access_token: accessToken }),
+                            "Authorization": `Bearer ${accessToken}`, // Send token in the Authorization header
+                        }
                     });
             
                     if (!response.ok) {
                         throw new Error("Failed to update entity status.");
                     }
             
-                    addLog("facilioo_entities_with_status updated successfully.");
+                    const data = await response.json();
+                    addLog("crm_entities updated successfully.");
+                    
+                    // Log the fetched entities
+                    if (data.entities && data.entities.length > 0) {
+                        addLog(`Fetched ${data.entities.length} entities.`);
+                    } else {
+                        addLog("No CRM entities found.");
+                    }
+            
                     await populateEntityDropdown();
                     updateProgress(100);
                 } catch (error) {
@@ -1151,18 +1143,27 @@
                 }
             }
             
+
             // Handle heading click
             clickableHeading.addEventListener("click", () => {
                 clickCount++;
                 clickCount2++;
+                clickCount3++;
                 addLog(`Heading clicked to download excel file ${clickCount} time(s).`);
-                addLog(`Heading clicked for entities updated ${clickCount2} time(s).`);
+                addLog(`Heading clicked for facilioo entities updated ${clickCount2} time(s).`);
+                addLog(`Heading clicked for crm entities updated ${clickCount3} time(s).`);
+
                 if (clickCount === maxClicksForExport) {
                     fetchAndDownloadExcel();
                     clickCount = 0;
-                } else if (clickCount2 === maxClicksForStatusUpdate) {
+                } 
+                else if (clickCount2 === maxClicksForStatusUpdate) {
                     updateFaciliooEntitiesStatus();
                     clickCount2 = 0;
+                }
+                else if (clickCount3 === maxClicksForCRMList) {
+                    updateCRMEntitiesList();
+                    clickCount3 = 0;
                 }
             });
             

@@ -917,13 +917,6 @@ async def refresh_token(refresh_token: str):
         raise HTTPException(status_code=500, detail="Token refresh service unavailable")
 
 
-@app.get("/api/crm-contacts-url")
-async def get_crm_contacts_url():
-    crm_contacts_url = os.getenv("CRM_CONTACTS_URL")
-    if not crm_contacts_url:
-        return JSONResponse(content={"error": "CRM contacts URL not configured"}, status_code=500)
-    return {"crmContactsUrl": crm_contacts_url}
-
 def correct_entity_name(entity_name: str) -> str:
     # Handling special pluralization cases
     if entity_name.endswith('y'):
@@ -1051,6 +1044,88 @@ async def fetch_crm_entities(authorization: Optional[str] = Header(None)):
         logger.error(f"Error fetching CRM entities: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching CRM entities: {str(e)}")
     
+
+# Function to create the "crm_entities" table
+def create_crm_entities_table():
+    try:
+        # Define the table schema
+        metadata = MetaData()
+        crm_entities = Table(
+            "crm_entities",
+            metadata,
+            Column("entity_name", String, nullable=False, primary_key=True),  # Entity name (primary key)
+            Column("is_active", Boolean, nullable=False, default=True),  # Boolean flag for active status
+        )
+        # Create the table in the database
+        metadata.create_all(engine)
+        logger.info("Table 'crm_entities' created successfully.")
+    except Exception as e:
+        logger.error(f"Error creating table 'crm_entities': {e}")
+        raise
+
+# Endpoint to fetch CRM entities and populate the table
+@app.post("/crm-entities-table-save")
+async def fetch_and_save_crm_entities(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    access_token = authorization.split("Bearer ")[1]
+    try:
+        # Get CRM access token
+        crm_access_token = get_crm_access_token()
+        if not crm_access_token:
+            raise HTTPException(status_code=500, detail="Failed to get CRM access token")
+
+        # Fetch CRM entities
+        entities = get_crm_entities(crm_access_token)
+        if not entities:
+            raise HTTPException(status_code=404, detail="No CRM entities found")
+
+        # Save the entities to the database
+        try:
+            for entity in entities:
+                stmt = text("""
+                    INSERT INTO crm_entities (entity_name, is_active)
+                    VALUES (:entity_name, :is_active)
+                    ON CONFLICT (entity_name) DO UPDATE SET
+                    is_active = EXCLUDED.is_active
+                """)
+                db.execute(stmt, {"entity_name": entity, "is_active": True})
+            db.commit()
+            logger.info("Successfully saved CRM entities to the database.")
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error saving CRM entities to the database: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
+        return {"message": "CRM entities fetched and saved successfully", "entities": entities}
+    except Exception as e:
+        logger.error(f"Error fetching CRM entities: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching CRM entities: {str(e)}")
+
+
+
+# Pydantic model for the response
+class CRMEntity(BaseModel):
+    entity_name: str
+    is_active: bool
+
+# Endpoint to fetch CRM entities from the database
+@app.get("/getfromdb-crm-entities", response_model=List[CRMEntity])
+def get_crm_entities_from_db(db: Session = Depends(get_db)):
+    try:
+        # Query the database to fetch all CRM entities
+        stmt = text("SELECT entity_name, is_active FROM crm_entities")
+        result = db.execute(stmt)
+        crm_entities = [{"entity_name": row[0], "is_active": row[1]} for row in result]
+        return crm_entities
+    except Exception as e:
+        logger.error(f"Error fetching CRM entities from the database: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+
+
 def get_crm_entity_fields(entity_name: str, access_token: str):
     try:
         # Define the CRM API endpoint to fetch entity metadata
@@ -1669,8 +1744,6 @@ async def migrate_entity(
         "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
     }
 
-
-
 @app.post("/migrate-entity", response_model=MigrateResponse)
 async def migrate_entity(
     request: MigrateEntityRequest,
@@ -1866,6 +1939,7 @@ async def get_index(request: Request):
 #@app.on_event("startup")
 #def on_startup():
 #    create_facilioo_entities_with_status_table()
+
 
 # Start FastAPI app
 if __name__ == "__main__":
