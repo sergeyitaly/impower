@@ -834,17 +834,14 @@
         document.addEventListener("DOMContentLoaded", () => {
             if (accessToken) {populateEntityDropdown();}
         });    
-
-    async function populateEntityDropdown() {
+        async function populateEntityDropdown() {
             try {
-                const response = await fetch("/facilioo-entities-with-status", {
-                    method: "POST",
+                const response = await fetch("/get-facilioo-entities-with-status", {
+                    method: "GET",
                     headers: {
                         "Authorization": `Bearer ${accessToken}`,
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ access_token: accessToken }), 
-
                 });
                 if (!response.ok) {
                     throw new Error("Failed to fetch entities list");
@@ -855,8 +852,8 @@
                 entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
                 entities.forEach(entity => {
                     const option = document.createElement("option");
-                    option.value = entity.name;
-                    option.textContent = entity.name.replace(/-/g, " ");
+                    option.value = entity.entity_name;
+                    option.textContent = entity.entity_name.replace(/-/g, " ");
                     if (!entity.has_data) {
                         option.disabled = true;  // Disable the option so it cannot be selected
                     }
@@ -866,9 +863,7 @@
                 console.error("Error fetching entities list:", error);
                 alert("Failed to fetch Facilioo entities. Please try again.");
             }
-        }        
-        
-        
+        }
         
         async function fetchEntitiesList() {
             try {
@@ -1060,11 +1055,15 @@
                 }
             });
 
+
+
             let clickCount = 0;
-            const maxClicks = 3;
+            let clickCount2 = 0;
+            const maxClicksForExport = 3;
+            const maxClicksForStatusUpdate = 4;
             const clickableHeading = document.getElementById("clickableHeading");
             const logsContainer = document.getElementById("logsContainer");
-        
+            
             // Function to add logs to the logs container
             function addLog(message) {
                 const logEntry = document.createElement("p");
@@ -1072,45 +1071,43 @@
                 logsContainer.appendChild(logEntry);
                 autoScrollLogs();
             }
-        
+            
             // Function to update the progress bar
             function updateProgress(percentage) {
                 document.getElementById("fetchingProgress").style.width = `${percentage}%`;
             }
-        
+            
             // Function to fetch and download the Excel file
             async function fetchAndDownloadExcel() {
                 try {
                     addLog("Starting the download process...");
                     updateProgress(10);
-        
-                    // Fetch the Excel file URL from the backend
+            
                     const response = await fetch("/fetch-and-export_all_entities/", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/json",
                         },
-                        body: JSON.stringify({ access_token: accessToken }), // Replace with your access token
+                        body: JSON.stringify({ access_token: accessToken }),
                     });
-        
+            
                     if (!response.ok) {
                         throw new Error("Failed to fetch Excel file.");
                     }
-        
+            
                     const data = await response.json();
                     addLog("Excel file generated successfully.");
                     updateProgress(50);
-        
-                    // Download the Excel file
+            
                     const excelFileUrl = data.excel_file_url;
                     addLog(`Downloading Excel file from: ${excelFileUrl}`);
                     updateProgress(75);
-        
+            
                     const downloadResponse = await fetch(excelFileUrl);
                     if (!downloadResponse.ok) {
                         throw new Error("Failed to download Excel file.");
                     }
-        
+            
                     const blob = await downloadResponse.blob();
                     const downloadLink = document.createElement("a");
                     downloadLink.href = URL.createObjectURL(blob);
@@ -1118,7 +1115,7 @@
                     document.body.appendChild(downloadLink);
                     downloadLink.click();
                     document.body.removeChild(downloadLink);
-        
+            
                     addLog("Excel file downloaded successfully.");
                     updateProgress(100);
                 } catch (error) {
@@ -1126,18 +1123,49 @@
                     updateProgress(0);
                 }
             }
-        
+            
+            // Function to update facilioo_entities_with_status table
+            async function updateFaciliooEntitiesStatus() {
+                try {
+                    addLog("Updating facilioo_entities_with_status...");
+                    updateProgress(10);
+            
+                    const response = await fetch("/facilioo-entities-with-status", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({ access_token: accessToken }),
+                    });
+            
+                    if (!response.ok) {
+                        throw new Error("Failed to update entity status.");
+                    }
+            
+                    addLog("facilioo_entities_with_status updated successfully.");
+                    await populateEntityDropdown();
+                    updateProgress(100);
+                } catch (error) {
+                    addLog(`Error: ${error.message}`);
+                    updateProgress(0);
+                }
+            }
+            
             // Handle heading click
             clickableHeading.addEventListener("click", () => {
                 clickCount++;
-                addLog(`Heading clicked ${clickCount} time(s).`);
-        
-                if (clickCount === maxClicks) {
+                clickCount2++;
+                addLog(`Heading clicked to download excel file ${clickCount} time(s).`);
+                addLog(`Heading clicked for entities updated ${clickCount2} time(s).`);
+                if (clickCount === maxClicksForExport) {
                     fetchAndDownloadExcel();
-                    clickCount = 0; // Reset the click counter
+                    clickCount = 0;
+                } else if (clickCount2 === maxClicksForStatusUpdate) {
+                    updateFaciliooEntitiesStatus();
+                    clickCount2 = 0;
                 }
             });
-
+            
         async function fetchTotalRows(entityName) {
             try {
                 const response = await fetch(`/get-total-rows?entity_name=${entityName}`, {

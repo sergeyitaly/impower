@@ -213,6 +213,44 @@ def create_table_for_entity(entity_name: str, sample_record: dict):
         logger.error(f"Error creating table for entity {entity_name.lower()}: {str(e)}")
         raise  # Re-raise the exception to stop further execution
 
+
+
+# Pydantic model for the response
+class EntityStatus(BaseModel):
+    entity_name: str
+    has_data: bool
+
+# Function to create the "facilioo_entities_with_status" table
+def create_facilioo_entities_with_status_table():
+    try:
+        # Define the table schema
+        metadata = MetaData()
+        facilioo_entities_with_status = Table(
+            "facilioo_entities_with_status",
+            metadata,
+            Column("entity_name", String, nullable=False, primary_key=True),  # Entity name (primary key)
+            Column("has_data", Boolean, nullable=False),  # Boolean flag for data status
+        )
+        # Create the table in the database
+        metadata.create_all(engine)
+        logger.info("Table 'facilioo_entities_with_status' created successfully.")
+    except Exception as e:
+        logger.error(f"Error creating table 'facilioo_entities_with_status': {e}")
+        raise
+
+# Endpoint to fetch entities with status from the database
+@app.get("/get-facilioo-entities-with-status", response_model=List[EntityStatus])
+def get_facilioo_entities_with_status(db: Session = Depends(get_db)):
+    try:
+        # Query the database to fetch all entities with their status
+        stmt = text("SELECT entity_name, has_data FROM facilioo_entities_with_status")
+        result = db.execute(stmt)
+        entities_with_status = [{"entity_name": row[0], "has_data": row[1]} for row in result]
+        return entities_with_status
+    except Exception as e:
+        logger.error(f"Error fetching entities with status from the database: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 def strip_html_tags(text):
     clean = re.sub(r'<.*?>', '', text)
     return clean.strip() 
@@ -324,10 +362,12 @@ async def get_crm_entity_link(entity_name: str, authorization: Optional[str] = H
         raise HTTPException(status_code=500, detail=f"Error generating CRM entity link: {str(e)}")
 
 
-
-
+# Endpoint to fetch and save entity status
 @app.post("/facilioo-entities-with-status")
-def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
+def get_facilioo_entities_with_status(
+    request: FaciliooEntitiesRequest,
+    db: Session = Depends(get_db)
+):
     access_token = request.access_token
     if not access_token:
         raise HTTPException(status_code=401, detail="Access token is required")
@@ -340,6 +380,7 @@ def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
     entities = FACILIOO_ENTITIES  # Replace with your actual list of entities
     entities_with_status = []
 
+    # Fetch data for each entity
     for entity in entities:
         try:
             logger.info(f"Checking status for entity: {entity}")
@@ -349,25 +390,37 @@ def get_facilioo_entities_with_status(request: FaciliooEntitiesRequest):
                 params={"PageSize": 1, "PageNumber": 1, "AscendingOrder": True},
             )
 
-        #    logger.info(f"Response status code for {entity}: {response.status_code}")
-        #    logger.info(f"Response body for {entity}: {response.text}")  # Log the response body for debugging
-
             if response.status_code == 200:
                 entity_data = response.json().get("items", [])
                 if entity_data:
-        #            logger.info(f"Entity {entity} has data: {entity_data}")
-                    entities_with_status.append({"name": entity, "has_data": True})  # Entity has data
+                    entities_with_status.append({"entity_name": entity, "has_data": True})  # Entity has data
                 else:
                     logger.info(f"Entity {entity} has no data.")
-                    entities_with_status.append({"name": entity, "has_data": False})  # Entity has no data
+                    entities_with_status.append({"entity_name": entity, "has_data": False})  # Entity has no data
             else:
-        #        logger.warning(f"Failed to fetch data for entity {entity}. Status code: {response.status_code}")
-                entities_with_status.append({"name": entity, "has_data": False})  # Assume no data if API call fails
+                logger.warning(f"Failed to fetch data for entity {entity}. Status code: {response.status_code}")
+                entities_with_status.append({"entity_name": entity, "has_data": False})  # Assume no data if API call fails
         except Exception as e:
-        #    logger.error(f"Error checking status for entity {entity}: {str(e)}", exc_info=True)
-            entities_with_status.append({"name": entity, "has_data": False})  # Assume no data on error
+            logger.error(f"Error checking status for entity {entity}: {str(e)}", exc_info=True)
+            entities_with_status.append({"entity_name": entity, "has_data": False})  # Assume no data on error
 
-    #logger.info(f"Final entities_with_status: {entities_with_status}")
+    # Save the results to the database
+    try:
+        for entity_status in entities_with_status:
+            stmt = text("""
+                INSERT INTO facilioo_entities_with_status (entity_name, has_data)
+                VALUES (:entity_name, :has_data)
+                ON CONFLICT (entity_name) DO UPDATE SET
+                has_data = EXCLUDED.has_data
+            """)
+            db.execute(stmt, entity_status)
+        db.commit()
+        logger.info("Successfully saved entities with status to the database.")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error saving entities with status to the database: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
     return entities_with_status
 
 class ExportEntityRequest(BaseModel):
@@ -1809,6 +1862,10 @@ async def get_migration_logs():
 @app.get("/", response_class=HTMLResponse)
 async def get_index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
+
+#@app.on_event("startup")
+#def on_startup():
+#    create_facilioo_entities_with_status_table()
 
 # Start FastAPI app
 if __name__ == "__main__":
