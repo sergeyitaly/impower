@@ -1025,6 +1025,52 @@ def get_crm_entities_status(access_token: str):
 
 
 
+def set_all_entities_customizable(access_token: str):
+    try:
+        # Fetch all entities
+        entities_url = f"{CRM_URL}/EntityDefinitions"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        response = requests.get(entities_url, headers=headers)
+        
+        if response.status_code != 200:
+            logger.warning(f"Failed to fetch entities. Status code: {response.status_code}")
+            return False
+
+        # Loop through entities and update IsCustomizable
+        entities_data = response.json().get("value", [])
+        for entity in entities_data:
+            entity_name = entity["LogicalName"]
+
+            # Skip if the entity is not customizable
+            if not entity.get("IsCustomizable", {}).get("CanBeChanged", False):
+                logger.info(f"Skipping entity {entity_name} because it is not customizable.")
+                continue
+
+            update_url = f"{CRM_URL}/EntityDefinitions(LogicalName='{entity_name}')"
+            payload = {
+                "IsCustomizable": {
+                    "Value": True,
+                    "CanBeChanged": True
+                }
+            }
+
+            # Send the PATCH request
+            update_response = requests.patch(update_url, headers=headers, json=payload)
+            if update_response.status_code == 204:
+                logger.info(f"Entity {entity_name} is now customizable.")
+            else:
+                logger.warning(f"Failed to update entity {entity_name}. Status code: {update_response.status_code}")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Error updating entities: {str(e)}")
+        return False
+    
+    
 @app.get("/crm-entities")
 async def fetch_crm_entities(authorization: Optional[str] = Header(None)):
     if not authorization or not authorization.startswith("Bearer "):
@@ -1037,13 +1083,16 @@ async def fetch_crm_entities(authorization: Optional[str] = Header(None)):
         if not crm_access_token:
             raise HTTPException(status_code=500, detail="Failed to get CRM access token")
 
+        # Set all entities as customizable
+        if not set_all_entities_customizable(crm_access_token):
+            logger.warning("Failed to set all entities as customizable.")
+
         # Fetch CRM entities
         entities = get_crm_entities(crm_access_token)
         return {"entities": entities}
     except Exception as e:
         logger.error(f"Error fetching CRM entities: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching CRM entities: {str(e)}")
-    
+        raise HTTPException(status_code=500, detail=f"Error fetching CRM entities: {str(e)}")    
 
 # Function to create the "crm_entities" table
 def create_crm_entities_table():
@@ -1063,6 +1112,7 @@ def create_crm_entities_table():
         logger.error(f"Error creating table 'crm_entities': {e}")
         raise
 
+
 # Endpoint to fetch CRM entities and populate the table
 @app.post("/crm-entities-table-save")
 async def fetch_and_save_crm_entities(authorization: Optional[str] = Header(None), db: Session = Depends(get_db)):
@@ -1075,6 +1125,10 @@ async def fetch_and_save_crm_entities(authorization: Optional[str] = Header(None
         crm_access_token = get_crm_access_token()
         if not crm_access_token:
             raise HTTPException(status_code=500, detail="Failed to get CRM access token")
+
+        # Set all entities as customizable
+        if not set_all_entities_customizable(crm_access_token):
+            logger.warning("Failed to set all entities as customizable.")
 
         # Fetch CRM entities
         entities = get_crm_entities(crm_access_token)

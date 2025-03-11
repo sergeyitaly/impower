@@ -207,8 +207,8 @@
             $("#matchedFieldsDropdown").select2({
                 placeholder: "Select matched fields",
                 allowClear: true,
-                //width: "50%"
-                width: "resolve"  
+                width: "65%"
+                //width: "resolve"  
             });
 
             $("#matchedFieldsDropdown").on("change", function () {
@@ -836,7 +836,8 @@
                     }
                     entitySelectCRM.appendChild(option);
                 });
-        
+                sortSelectOptions("entitySelectCRM"); // Sort after population
+
                 console.log("CRM entities loaded successfully.");
             } catch (error) {
                 console.error("Error fetching CRM entities:", error);
@@ -844,10 +845,30 @@
             }
         }
     
+        function sortSelectOptions(selectId) {
+            const select = document.getElementById(selectId);
+            const options = Array.from(select.options);
     
-    document.addEventListener("DOMContentLoaded", () => {if (accessToken) {fetchAndPopulateCrmEntities()}});
-    document.addEventListener("DOMContentLoaded", () => {if (accessToken) {populateEntityDropdown();}});   
-
+            // Exclude the first option (e.g., "-- Select --")
+            const sortedOptions = options.slice(1).sort((a, b) => 
+                a.text.localeCompare(b.text)
+            );
+    
+            // Clear the select and re-add the default option
+            select.innerHTML = "";
+            select.appendChild(options[0]);
+    
+            // Append sorted options
+            sortedOptions.forEach(option => select.appendChild(option));
+        }
+    
+        document.addEventListener("DOMContentLoaded", () => {
+            if (accessToken) {
+                fetchAndPopulateCrmEntities();
+                populateEntityDropdown();
+            }
+        });
+        
     async function populateEntityDropdown() {
             try {
                 const response = await fetch("/get-facilioo-entities-with-status", {
@@ -869,6 +890,8 @@
                     if (!entity.has_data) {option.disabled = true;}
                     entitySelect.appendChild(option);
                 });
+                sortSelectOptions("entitySelect"); // Sort after population
+
             } catch (error) {
                 console.error("Error fetching entities list:", error);
                 alert("Failed to fetch Facilioo entities. Please try again.");
@@ -1192,7 +1215,9 @@
             }
         }
 
-        
+
+
+
         async function getCrmContactsUrl() {
             try {
                 const response = await fetch('/api/crm-contacts-url');
