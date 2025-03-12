@@ -1355,7 +1355,6 @@ def preprocess_field(value):
         return value.strip()  # Remove leading/trailing whitespace
     return value
 
-
 def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str) -> Dict:
     # If matched_fields is a JSON string, parse it to a list
     if isinstance(matched_fields, str):
@@ -1409,7 +1408,9 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
 
     try:
         # Step 1: Use the unique_identifier_field to implement Upsert
-        unique_identifier_field = matched_fields[0].split('-')[1]  # First CRM field
+        unique_identifier_field = matched_fields[0].split('-')[1]  # First CRM field (e.g., accountid)
+        unique_identifier_field = unique_identifier_field.replace(' *', '').strip()
+        unique_identifier_field = unique_identifier_field.replace(' +', '').strip()
         unique_identifier_value = crm_data.get(unique_identifier_field)
 
         if unique_identifier_value:
@@ -1424,7 +1425,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
                 existing_records = query_response.json().get("value", [])
                 if existing_records:
                     # Extract the record_id (primary key) from the existing record
-                    record_id = existing_records[0].get(f"{selected_crm_entity.lower()}id")  # e.g., "attributeid"
+                    record_id = existing_records[0].get(f"{selected_crm_entity.lower()}id")  # e.g., "accountid"
 
                     if not record_id:
                         logger.error(f"Primary key field not found in existing records.")
@@ -1508,7 +1509,8 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             "error": str(e),
             "failed_fields": failed_fields
         }
-    
+
+
 def export_all_entity_to_excel(data: list, entity_name: str) -> str:
     from openpyxl import Workbook
     import re
