@@ -212,25 +212,45 @@
             });
 
             $("#matchedFieldsDropdown").on("change", function () {
+                // Toggle the visibility of the save button based on whether any fields are selected
                 $("#saveMatchingBtnContainer").toggle($(this).val().length > 0);
                 isDropdownChanged = true; // Set the flag to true when dropdown changes
                 saveMatchingBtn.show(); // Show the Save Matching button
-
+            
+                // Highlight the first selected option in the dropdown
+                highlightFirstSelectedOption();
             });
-
+            
             $("#matchedFieldsDropdown").on("select2:select", function (e) {
-                $(".select2-selection__choice").css("background-color", "");
-                $(".select2-selection__choice").first().css("background-color", "yellow");
-                $("#matchedFieldsDropdown option").css("background-color", "");
-                $("#matchedFieldsDropdown option:selected").first().css("background-color", "yellow");
+                // Highlight the first selected option in the dropdown
+                highlightFirstSelectedOption();
             });
-        
+            
             $("#matchedFieldsDropdown").on("select2:unselect", function (e) {
-                $(".select2-selection__choice").css("background-color", "");
-                $(".select2-selection__choice").first().css("background-color", "yellow");
-                $("#matchedFieldsDropdown option").css("background-color", "");
-                $("#matchedFieldsDropdown option:selected").first().css("background-color", "yellow");
+                // Highlight the first selected option in the dropdown
+                highlightFirstSelectedOption();
             });
+            
+            // Helper function to highlight the first selected option
+            function highlightFirstSelectedOption() {
+                // Reset all selected options' background color
+                $("#matchedFieldsDropdown option").css("background-color", "");
+            
+                // Get the first selected option and highlight it
+                const firstSelectedOption = $("#matchedFieldsDropdown option:selected").first();
+                if (firstSelectedOption.length) {
+                    firstSelectedOption.css("background-color", "yellow");
+                }
+            
+                // Reset all Select2 choice backgrounds
+                $(".select2-selection__choice").css("background-color", "");
+            
+                // Highlight the first Select2 choice
+                const firstSelect2Choice = $(".select2-selection__choice").first();
+                if (firstSelect2Choice.length) {
+                    firstSelect2Choice.css("background-color", "yellow");
+                }
+            }
 
             $("#saveMatchingBtn").on("click", async function () {
                 const selectedFaciliooEntity = $("#entitySelect").val();
@@ -249,6 +269,7 @@
                 logsContainer.innerHTML += `<p>📤 Sending payload: ${JSON.stringify(payload)}</p>`;            
                 autoScrollLogs();            
                 document.getElementById("migrationSummary").style.display = "none";
+
                 try {
                     const response = await fetch("/save-matching-columns", {
                         method: "POST",
@@ -528,6 +549,7 @@
                                 option.selected = true;
                             }
                             matchedFieldsDropdown.prepend(option);
+                            //matchedFieldsDropdown.appendChild(option);
                         });
             
                         document.getElementById("matchedFieldsDropdownContainer").style.display = matchedFields.length > 0 ? "block" : "none";
@@ -697,8 +719,8 @@
                     </p>
                 `;
                 
-                    autoScrollLogs();
-                    await new Promise(resolve => setTimeout(resolve, 10)); // 100ms delay
+                    //autoScrollLogs();
+                    await new Promise(resolve => setTimeout(resolve, 1)); // 100ms delay
                 }
         
                 // Log migration summary
@@ -710,7 +732,7 @@
                     <p>Inserted: ${data.insert_count}</p>
                     <p>Failed: ${data.error_count}</p>
                 `;
-                autoScrollLogs();
+                //autoScrollLogs();
         
                 // Update migration summary table
                 const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
@@ -751,12 +773,11 @@
                 hideLoadingSpinner();
             }
         });
-
+        
         function autoScrollLogs() {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.scrollTop = logsContainer.scrollHeight; // Scroll to the bottom
         }
-
 
 
         document.getElementById("authenticateBtn").addEventListener("click", async () => {

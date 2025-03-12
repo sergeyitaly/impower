@@ -1378,7 +1378,10 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
         # Check if the facilioo_field exists in the entity data
         if facilioo_field in entity_data:
             field_value = entity_data[facilioo_field]
-            
+            # Convert to numeric if possible
+            if isinstance(field_value, str) and field_value.replace('.', '', 1).isdigit():
+                field_value = float(field_value) if '.' in field_value else int(field_value)
+
             # Handle GUID fields (e.g., attributeid)
             if crm_field.lower().endswith('id') and crm_field.lower() != 'id':
                 # Generate entity-specific GUID
