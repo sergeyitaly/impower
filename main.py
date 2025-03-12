@@ -1192,12 +1192,13 @@ def get_crm_entity_fields(entity_name: str, access_token: str):
         if response.status_code != 200:
             raise Exception(f"Failed to fetch entity fields: {response.text}")
 
-        # Parse the response to extract field names and required status
+        # Parse the response to extract field names, required status, and upsert capability
         attributes_data = response.json().get("value", [])
         columns = [
             {
                 "name": attribute["LogicalName"],
-                "mandatory": attribute.get("RequiredLevel", {}).get("Value") == "ApplicationRequired"
+                "mandatory": attribute.get("RequiredLevel", {}).get("Value") == "ApplicationRequired",
+                "upsert": attribute.get("IsValidForCreate", False) or attribute.get("IsValidForUpdate", False)
             }
             for attribute in attributes_data
         ]
@@ -1355,7 +1356,6 @@ def preprocess_field(value):
     return value
 
 
-
 def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_entity: str) -> Dict:
     # If matched_fields is a JSON string, parse it to a list
     if isinstance(matched_fields, str):
@@ -1364,6 +1364,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
     access_token = get_crm_access_token()
     crm_url = f"{CRM_URL}/{correct_entity_name(selected_crm_entity)}"
     logger.info(f"Matched fields received: {matched_fields}")
+    logger.info(f"Using CRM entity type: {selected_crm_entity}")
     
     crm_data = {}
     failed_fields = []  # Track fields that fail validation or processing
@@ -1373,8 +1374,10 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
         # Split the string into 'facilioo_field' and 'crm_field'
         facilioo_field, crm_field = field_pair.split('-')
         crm_field = crm_field.replace(' *', '').strip()
-        logger.info(f"Processing source field: {facilioo_field}, CRM field: {crm_field}")
-        
+        crm_field = crm_field.replace(' +', '').strip()
+
+        logger.info(f"Processing source field: {facilioo_field}, CRM field: {crm_field}.")
+
         # Check if the facilioo_field exists in the entity data
         if facilioo_field in entity_data:
             field_value = entity_data[facilioo_field]
@@ -1505,7 +1508,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             "error": str(e),
             "failed_fields": failed_fields
         }
-
+    
 def export_all_entity_to_excel(data: list, entity_name: str) -> str:
     from openpyxl import Workbook
     import re

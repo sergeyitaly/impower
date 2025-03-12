@@ -449,7 +449,15 @@
                     if (faciliooData.success && crmData.success && matchedFieldsData.success) {
                         const faciliooFields = faciliooData.columns;
                         //const crmFields = crmData.columns;
-                        const crmFields = crmData.columns.map(column => column.mandatory ? `${column.name} *` : column.name);
+                        const crmFields = crmData.columns.map(column => {
+                            if (column.mandatory) {
+                                return `${column.name} *`; // Red color for required fields
+                            } else if (column.upsert) {
+                                return `${column.name} +`; // Green color for upsert fields with a + sign
+                            } else {
+                                return column.name; // Default column without additional symbols
+                            }
+                        });
                         const existingMatchedFields = matchedFieldsData.matched_fields || [];
             
                         const isEntirelyPartOf = (field1, field2) => {
@@ -961,7 +969,14 @@
                         data.columns.forEach(column => {
                             if (column.mandatory) {
                                 columnListHTML += `<li style="color: red;">${column.name} *</li>`; // Red color for required fields
-                            } else {columnListHTML += `<li>${column.name}</li>`;}
+                            } 
+                            
+                        // Check if the column has upsert = true
+                        else if (column.upsert) {
+                            columnListHTML += `<li style="color: green;">${column.name} + </li>`; // Green color for upsert fields
+                        } 
+                            
+                            else {columnListHTML += `<li>${column.name}</li>`;}
                         });
                         columnListHTML += "</ul>";
                         logsContainer.innerHTML += columnListHTML;
