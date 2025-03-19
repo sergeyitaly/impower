@@ -1227,7 +1227,6 @@ async def fetch_crm_entity_fields(entity_name: str, authorization: Optional[str]
         logger.error(f"Error fetching CRM entity fields: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching CRM entity fields: {str(e)}")
 
-
 @app.post("/authenticate")
 async def authenticate(request: AuthRequest):
     logger.info(f"Authentication attempt for email: {request.email}")
@@ -1993,6 +1992,7 @@ async def get_migration_logs():
             connection.close()
 
 
+
 # FastAPI route to serve the index.html page
 @app.get("/", response_class=HTMLResponse)
 async def get_index(request: Request):
@@ -2001,7 +2001,6 @@ async def get_index(request: Request):
 #@app.on_event("startup")
 #def on_startup():
 #    create_facilioo_entities_with_status_table()
-
 
 # Start FastAPI app
 if __name__ == "__main__":

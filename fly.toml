@@ -4,7 +4,7 @@
 #
 
 app = 'dynamics-migration'
-primary_region = 'fra'
+primary_region = 'ewr'
 
 [build]
 
