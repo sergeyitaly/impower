@@ -175,6 +175,34 @@
             </div>
         </div>
 
+
+
+        <!-- Metrics Section -->
+        <div id="metricsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
+            <h3 class="text-xl font-semibold mb-4"><i class="fas fa-chart-line"></i> Migration Metrics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Source and Target -->
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Source & Target</h4>
+                    <p><strong>Source:</strong> <span id="sourceEntity">N/A</span></p>
+                    <p><strong>Target:</strong> <span id="targetEntity">N/A</span></p>
+                </div>
+
+                <!-- Errors -->
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Errors</h4>
+                    <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
+                    <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
+                </div>
+
+                <!-- Data Quality and Velocity -->
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Performance</h4>
+                    <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
+                    <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
+                </div>
+            </div>
+        </div>
         <!-- Excel Download Link -->
         <div id="excelDownload" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
             <a id="excelLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">
@@ -616,12 +644,12 @@
             this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
         });
 
-
         document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.innerHTML = "";
             logsContainer.style.display = "block";
             document.getElementById("migrationSummary").style.display = "none";
+            document.getElementById("metricsSection").style.display = "none"; // Hide metrics initially
             resetProgressBars();
             showLoadingSpinner();
         
@@ -629,16 +657,12 @@
                 const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
                 const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
         
+                // Update Source and Target in the Metrics Section
+                document.getElementById("sourceEntity").textContent = selectedFaciliooEntity;
+                document.getElementById("targetEntity").textContent = selectedCrmEntity;
+        
                 // Log start of migration
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
-                
-                const fetchingMessageElement = document.querySelector("#fetchingMessage");
-                if (fetchingMessageElement) {
-                    fetchingMessageElement.textContent = "Fetching ...";
-                } else {
-                    console.error('Fetching message element not found');
-                }
-                document.getElementById("fetchingProgress").style.width = "50%";
         
                 // Fetch matched fields for the selected entities
                 const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
@@ -684,6 +708,8 @@
                 document.getElementById("migrationMessage").textContent = "Starting migration...";
                 document.getElementById("migrationProgress").style.width = "0%";
         
+                const startTime = Date.now(); // Record start time for velocity calculation
+        
                 const response = await fetch("/migrate-entity", {
                     method: "POST",
                     headers: {
@@ -713,23 +739,36 @@
         
                     // Log the current record being processed
                     logsContainer.innerHTML += `
-                    <p>
-                        <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
-                        <br>
-                        <strong>Record ID:</strong> ${result.record_id || "N/A"} <br>
-                        <strong>Staging Status:</strong> ${result.staging_status || "N/A"} <br>
-                        <strong>CRM Status:</strong> ${result.crm_status || "N/A"} <br>
-                        <strong>Action:</strong> ${result.action || "none"} <br>
-                        <strong style="color: red;">Error:</strong> ${result.error ? `<span style="color: red;">${result.error}</span>` : "none"} <br>
-                        <strong style="color: orange;">Failed Fields:</strong> ${Array.isArray(result.failed_fields) && result.failed_fields.length 
-                            ? `<span style="color: orange;">${result.failed_fields.join(", ")}</span>` 
-                            : "none"} <br>
-                    </p>
-                `;
-                
-                    //autoScrollLogs();
-                    await new Promise(resolve => setTimeout(resolve, 1)); // 100ms delay
+                        <p>
+                            <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
+                            <br>
+                            <strong>Record ID:</strong> ${result.record_id || "N/A"} <br>
+                            <strong>Staging Status:</strong> ${result.staging_status || "N/A"} <br>
+                            <strong>CRM Status:</strong> ${result.crm_status || "N/A"} <br>
+                            <strong>Action:</strong> ${result.action || "none"} <br>
+                            <strong style="color: red;">Error:</strong> ${result.error ? `<span style="color: red;">${result.error}</span>` : "none"} <br>
+                            <strong style="color: orange;">Failed Fields:</strong> ${Array.isArray(result.failed_fields) && result.failed_fields.length 
+                                ? `<span style="color: orange;">${result.failed_fields.join(", ")}</span>` 
+                                : "none"} <br>
+                        </p>
+                    `;
+        
+                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
                 }
+        
+                // Calculate Velocity
+                const endTime = Date.now();
+                const totalTimeTaken = (endTime - startTime) / 1000; // Convert to seconds
+                const velocity = (totalMigratedRecords / totalTimeTaken).toFixed(2);
+                document.getElementById("migrationVelocity").textContent = `${velocity} records/sec`;
+        
+                // Calculate Data Quality
+                const dataQuality = ((totalMigratedRecords - data.error_count) / totalMigratedRecords * 100).toFixed(2);
+                document.getElementById("dataQuality").textContent = `${dataQuality}%`;
+        
+                // Update Errors
+                document.getElementById("totalErrors").textContent = data.error_count;
+                document.getElementById("failedFields").textContent = data.failed_fields?.length || 0;
         
                 // Log migration summary
                 logsContainer.innerHTML += `
@@ -740,7 +779,6 @@
                     <p>Inserted: ${data.insert_count}</p>
                     <p>Failed: ${data.error_count}</p>
                 `;
-                //autoScrollLogs();
         
                 // Update migration summary table
                 const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
@@ -754,16 +792,10 @@
                         <td class="px-4 py-2">${data.error_count}</td>
                     </tr>
                 `;
-        
-                // Show the migration summary table
+                // Show the migration summary table and metrics section
                 document.getElementById("migrationSummary").style.display = "block";
-                // Handle Excel download link
-                if (data.excel_file_url) {
-                    const excelLink = document.getElementById("excelLink");
-                    excelLink.href = data.excel_file_url;
-                    document.getElementById("excelDownload").style.display = "block";
-                }
-
+                document.getElementById("metricsSection").style.display = "block"; // Show metrics section
+        
                 // Update migration status message
                 if (data.error_count === 0) {
                     document.getElementById("migrationMessage").textContent = "Complete";
@@ -781,6 +813,7 @@
                 hideLoadingSpinner();
             }
         });
+        
         
         function autoScrollLogs() {
             const logsContainer = document.getElementById("logsContainer");

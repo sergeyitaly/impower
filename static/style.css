@@ -358,3 +358,100 @@ input:focus {
 .animate-spin {
     animation: spin 1s linear infinite;
 }
+
+
+/* General Styles for Metrics Section */
+#metricsSection {
+    font-family: 'Arial', sans-serif;
+    color: #333;
+}
+
+#metricsSection h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    color: #2d3748;
+}
+
+/* Grid Layout for Metrics */
+#metricsSection .grid {
+    display: grid;
+    gap: 1rem;
+}
+
+/* Individual Metric Card Styles */
+#metricsSection .bg-white {
+    background-color: #ffffff;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+#metricsSection .bg-white:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px -1px rgba(0, 0, 0, 0.15), 0 4px 8px -1px rgba(0, 0, 0, 0.1);
+}
+
+#metricsSection h4 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #4a5568;
+}
+
+#metricsSection p {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: #4a5568;
+}
+
+#metricsSection strong {
+    font-weight: 600;
+    color: #2d3748;
+}
+
+/* Responsive Grid for Laptop and Mobile */
+@media (min-width: 768px) {
+    #metricsSection .grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 767px) {
+    #metricsSection .grid {
+        grid-template-columns: 1fr;
+    }
+
+    #metricsSection h3 {
+        font-size: 1.25rem;
+    }
+
+    #metricsSection h4 {
+        font-size: 1.1rem;
+    }
+
+    #metricsSection p {
+        font-size: 0.9rem;
+    }
+}
+
+/* Additional Styling for Metrics */
+#metricsSection #sourceEntity,
+#metricsSection #targetEntity,
+#metricsSection #totalErrors,
+#metricsSection #failedFields,
+#metricsSection #dataQuality,
+#metricsSection #migrationVelocity {
+    color: #3182ce; /* Blue color for metric values */
+    font-weight: 500;
+}
+
+/* Hover Effects for Metric Cards */
+#metricsSection .bg-white:hover h4 {
+    color: #3182ce; /* Change heading color on hover */
+}
+
+#metricsSection .bg-white:hover p {
+    color: #4a5568; /* Change text color on hover */
+}
