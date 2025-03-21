@@ -176,7 +176,6 @@
         </div>
 
 
-
         <!-- Metrics Section -->
         <div id="metricsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
             <h3 class="text-xl font-semibold mb-4"><i class="fas fa-chart-line"></i> Migration Metrics</h3>
@@ -194,15 +193,23 @@
                     <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
                     <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
                 </div>
-
-                <!-- Data Quality and Velocity -->
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Performance</h4>
-                    <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
-                    <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
+            <!-- Performance Section -->
+            <div class="bg-white p-4 rounded-lg shadow-md relative group">
+                <h4 class="text-lg font-semibold mb-2">Performance</h4>
+                <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
+                <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
+                <!-- Compact Popup for Formulas -->
+                <div id="formulaPopup" class="hidden absolute bg-gray-50 p-1 rounded-md shadow-md border border-gray-300 w-40 text-xs z-10 group-hover:block" style="bottom: 120%; left: 50%; transform: translateX(-50%);">
+                    <p><strong>Data Quality:</strong></p>
+                    <p>((Migrated - Errors) / Migrated) × 100</p>
+                    <p class="mt-1"><strong>Velocity:</strong></p>
+                    <p>Migrated / Time (sec)</p>
                 </div>
             </div>
-        </div>
+
+            </div>
+        </div> 
+
         <!-- Excel Download Link -->
         <div id="excelDownload" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
             <a id="excelLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">
@@ -792,6 +799,14 @@
                         <td class="px-4 py-2">${data.error_count}</td>
                     </tr>
                 `;
+
+
+                // Handle Excel download link
+                if (data.excel_file_url) {
+                    const excelLink = document.getElementById("excelLink");
+                    excelLink.href = data.excel_file_url;
+                    document.getElementById("excelDownload").style.display = "block";
+                }
                 // Show the migration summary table and metrics section
                 document.getElementById("migrationSummary").style.display = "block";
                 document.getElementById("metricsSection").style.display = "block"; // Show metrics section
