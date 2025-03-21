@@ -153,58 +153,39 @@
             <div id="logsContainer" class="mt-4 bg-white p-4 rounded-lg shadow-md" style="display: none; max-height: 300px; overflow-y: auto;"></div>
         </div>
 
-        <!-- Migration Summary Table -->
-        <div id="migrationSummary" class="mt-8 max-w-2xl mx-auto" style="display: none;">
-            <h3 class="text-xl font-semibold mb-4"><i class="fas fa-table"></i> Migration Summary</h3>
-            <div class="bg-white p-4 rounded-lg shadow-md overflow-x-auto">
-                <table id="migrationSummaryTable" class="w-full">
-                    <thead>
-                        <tr class="bg-gray-100">
-                            <th class="px-4 py-2">Entity</th>
-                            <th class="px-4 py-2">Source Records</th>
-                            <th class="px-4 py-2">Processed Records</th>
-                            <th class="px-4 py-2">Created</th>
-                            <th class="px-4 py-2">Updated</th>
-                            <th class="px-4 py-2">Errors</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Rows will be populated dynamically -->
-                    </tbody>
-                </table>
-            </div>
+<!-- Metrics Section -->
+<div id="metricsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
+    <h3 class="text-xl font-semibold mb-4"><i class="fas fa-chart-line"></i> Migration Metrics</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Source and Target -->
+        <div class="bg-white p-4 rounded-lg shadow-md">
+            <h4 class="text-lg font-semibold mb-2">Source & Target</h4>
+            <p><strong>Source:</strong> <span id="sourceEntity">N/A</span></p>
+            <p><strong>Target:</strong> <span id="targetEntity">N/A</span></p>
         </div>
 
 
-        <!-- Metrics Section -->
-        <div id="metricsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
-            <h3 class="text-xl font-semibold mb-4"><i class="fas fa-chart-line"></i> Migration Metrics</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Source and Target -->
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Source & Target</h4>
-                    <p><strong>Source:</strong> <span id="sourceEntity">N/A</span></p>
-                    <p><strong>Target:</strong> <span id="targetEntity">N/A</span></p>
-                </div>
-            <!-- Performance Section -->
-            <div class="bg-white p-4 rounded-lg shadow-md relative group">
-                <h4 class="text-lg font-semibold mb-2">Performance</h4>
-                <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
-                <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
-                <!-- Compact Popup for Formulas -->
-                <div id="formulaPopup" class="hidden absolute bg-gray-50 p-1 rounded-md shadow-md border border-gray-300 w-40 text-xs z-10 group-hover:block" style="bottom: 120%; left: 50%; transform: translateX(-50%);">
-                    <p><strong>Data Quality:</strong></p>
-                    <p>((Migrated - Errors) / Migrated) × 100</p>
-                    <p class="mt-1"><strong>Velocity:</strong></p>
-                    <p>Migrated / Time (sec)</p>
-                </div>
+        <!-- Performance Section -->
+        <div class="bg-white p-4 rounded-lg shadow-md relative group">
+            <h4 class="text-lg font-semibold mb-2">Performance</h4>
+            <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
+            <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
+            <!-- Popup for Formulas -->
+            <div id="formulaPopup" class="hidden absolute bg-white p-4 rounded-lg shadow-md border border-gray-200 w-64 text-sm z-10 group-hover:block" style="top: 100%; left: 0;">
+                <p><strong>Data Quality:</strong></p>
+                <p>((Total Migrated Records - Total Errors) / Total Migrated Records) × 100</p>
+                <p class="mt-2"><strong>Velocity:</strong></p>
+                <p>Total Migrated Records / Total Time Taken (in seconds)</p>
             </div>
-                <!-- Errors -->
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Errors</h4>
-                    <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
-                    <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
-                </div>
+        </div>
+
+        <!-- Errors -->
+        <div class="bg-white p-4 rounded-lg shadow-md">
+            <h4 class="text-lg font-semibold mb-2">Errors</h4>
+            <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
+            <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
+        </div>
+
         <!-- Processed Records -->
         <div class="bg-white p-4 rounded-lg shadow-md">
             <h4 class="text-lg font-semibold mb-2">Processed</h4>
@@ -212,11 +193,8 @@
             <p><strong>Updated:</strong> <span id="updatedRecords">0</span></p>
             <p><strong>Created:</strong> <span id="createdRecords">0</span></p>
         </div>
-
-
-            </div>
-        </div> 
-
+    </div>
+</div>
         <!-- Excel Download Link -->
         <div id="excelDownload" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
             <a id="excelLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">
@@ -310,7 +288,6 @@
                 };
                 logsContainer.innerHTML += `<p>📤 Sending payload: ${JSON.stringify(payload)}</p>`;            
                 autoScrollLogs();            
-                document.getElementById("migrationSummary").style.display = "none";
 
                 try {
                     const response = await fetch("/save-matching-columns", {
@@ -349,7 +326,7 @@
                 const migrateEntityBtn = $("#migrateEntityBtn");
                 const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
                 const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
-                document.getElementById("migrationSummary").style.display = "none";
+
                 if (!selectedFaciliooEntity || !selectedCrmEntity) {
                     logsContainer.innerHTML = `<strong>Please select both entities to compare.</strong>`;
                     return;
@@ -451,7 +428,6 @@
                 logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
                 autoScrollLogs();
                 logsContainer.style.display = "block";
-                document.getElementById("migrationSummary").style.display = "none";
                 showLoadingSpinner();
             
                 try {
@@ -669,6 +645,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
     try {
         const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
         const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
+        document.getElementById("progressContainer").style.display = "block";
 
         // Update Source and Target in the Metrics Section
         document.getElementById("sourceEntity").textContent = selectedFaciliooEntity;
@@ -816,6 +793,8 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
         }
 
         setTimeout(resetProgressBars, 1000);
+        document.getElementById("progressContainer").style.display = "none";
+
     } catch (error) {
         console.error("Error:", error);
         logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration: ${error.message}</p>`;
@@ -862,8 +841,11 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 document.getElementById("progressContainer").style.display = "block";
                 document.getElementById("logsSection").style.display = "block";
                 document.getElementById("entityControls").style.display = "flex";
+                document.getElementById("progressContainer").style.display = "none";
+
                 await fetchAndPopulateCrmEntities();
                 await populateEntityDropdown();
+
             } catch (error) {
                 console.error("Error during authentication:", error);
                 alert(`Authentication failed: ${error.message}`);
@@ -954,7 +936,6 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 if (!response.ok) {throw new Error("Failed to fetch entities list");}
                 const entities = await response.json();
                 const entitySelect = document.getElementById("entitySelect");
-                document.getElementById("migrationSummary").style.display = "none";
                 entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
                 entities.forEach(entity => {
                     const option = document.createElement("option");
@@ -1063,7 +1044,6 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 showLoadingSpinner();
                 logsContainer.innerHTML = "";
                 logsContainer.style.display = "block";
-                document.getElementById("migrationSummary").style.display = "none";
                 logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for entity: ${selectedEntity}...</p>`;
                 autoScrollLogs();
                 try {

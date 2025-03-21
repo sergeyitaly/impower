@@ -420,26 +420,30 @@ input:focus {
 #metricsSection .bg-white:hover p {
     color: #4a5568; /* Change text color on hover */
 }
-
-
-
 /* Popup Styling */
 #formulaPopup {
+    position: absolute;
     top: 100%; /* Position below the Performance section */
     left: 50%;
     transform: translateX(-50%);
     margin-top: 8px;
     opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-/* Ensure the popup is hidden by default */
-.hidden {
     visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 /* Show the popup on hover */
 .bg-white:hover #formulaPopup {
     opacity: 1;
     visibility: visible;
+}
+
+
+.group:hover .group-hover\:block {
+    display: block;
+}
+/* Ensure the popup is hidden by default */
+.hidden {
+    visibility: hidden;
+    opacity: 0;
 }
