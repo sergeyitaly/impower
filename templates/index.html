@@ -186,13 +186,6 @@
                     <p><strong>Source:</strong> <span id="sourceEntity">N/A</span></p>
                     <p><strong>Target:</strong> <span id="targetEntity">N/A</span></p>
                 </div>
-
-                <!-- Errors -->
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Errors</h4>
-                    <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
-                    <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
-                </div>
             <!-- Performance Section -->
             <div class="bg-white p-4 rounded-lg shadow-md relative group">
                 <h4 class="text-lg font-semibold mb-2">Performance</h4>
@@ -206,6 +199,20 @@
                     <p>Migrated / Time (sec)</p>
                 </div>
             </div>
+                <!-- Errors -->
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Errors</h4>
+                    <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
+                    <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
+                </div>
+        <!-- Processed Records -->
+        <div class="bg-white p-4 rounded-lg shadow-md">
+            <h4 class="text-lg font-semibold mb-2">Processed</h4>
+            <p><strong>Total Records:</strong> <span id="totalProcessedRecords">0</span></p>
+            <p><strong>Updated:</strong> <span id="updatedRecords">0</span></p>
+            <p><strong>Created:</strong> <span id="createdRecords">0</span></p>
+        </div>
+
 
             </div>
         </div> 
@@ -651,184 +658,173 @@
             this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
         });
 
-        document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
-            const logsContainer = document.getElementById("logsContainer");
-            logsContainer.innerHTML = "";
-            logsContainer.style.display = "block";
-            document.getElementById("migrationSummary").style.display = "none";
-            document.getElementById("metricsSection").style.display = "none"; // Hide metrics initially
-            resetProgressBars();
-            showLoadingSpinner();
-        
-            try {
-                const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
-                const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
-        
-                // Update Source and Target in the Metrics Section
-                document.getElementById("sourceEntity").textContent = selectedFaciliooEntity;
-                document.getElementById("targetEntity").textContent = selectedCrmEntity;
-        
-                // Log start of migration
-                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
-        
-                // Fetch matched fields for the selected entities
-                const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
-                    method: "GET",
-                    headers: {"Authorization": `Bearer ${accessToken}`}
-                });
-        
-                if (!matchedFieldsResponse.ok) {
-                    throw new Error("Failed to fetch matched fields.");
-                }
-        
-                const matchedFieldsData = await matchedFieldsResponse.json();
-                const matchedFields = matchedFieldsData.matched_fields;
-        
-                if (!matchedFields || matchedFields.length === 0) {
-                    throw new Error("No matching fields found for the selected entities.");
-                }
-        
-                // Log matched fields
-                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved matched fields for migration.</p>`;
-                document.getElementById("fetchingProgress").style.width = "100%";
-                document.getElementById("fetchingMessage").textContent = "Complete";
-        
-                // Fetch entity data from staging
-                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving data for Facilioo entity: <b>${selectedFaciliooEntity}</b> from staging database...</p>`;
-                const entityDataResponse = await fetch(`/get-entity-data?entity_name=${selectedFaciliooEntity}`, {
-                    method: "GET",
-                    headers: {"Authorization": `Bearer ${accessToken}`}
-                });
-        
-                if (!entityDataResponse.ok) {
-                    throw new Error("Failed to fetch entity data from staging.");
-                }
-        
-                const entityData = await entityDataResponse.json();
-        
-                // Check the structure of entityData to find the number of records
-                const totalRecords = entityData.total_records || entityData.data?.length || entityData.length || 0;
-        
-                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${totalRecords} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
-        
-                // Start migration
-                document.getElementById("migrationMessage").textContent = "Starting migration...";
-                document.getElementById("migrationProgress").style.width = "0%";
-        
-                const startTime = Date.now(); // Record start time for velocity calculation
-        
-                const response = await fetch("/migrate-entity", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${accessToken}`
-                    },
-                    body: JSON.stringify({
-                        selected_facilioo_entity: selectedFaciliooEntity,
-                        selected_crm_entity: selectedCrmEntity
-                    }),
-                });
-        
-                if (!response.ok) {
-                    throw new Error("Migration failed.");
-                }
-        
-                const data = await response.json();
-                const totalMigratedRecords = data.total_records;
-                let processedRecords = 0;
-        
-                // Process migration results
-                for (const result of data.results) {
-                    processedRecords++;
-                    const progress = (processedRecords / totalMigratedRecords) * 100;
-                    document.getElementById("migrationProgress").style.width = `${progress}%`;
-                    document.getElementById("migrationMessage").textContent = `Migrating record ${result.record_id}...`;
-        
-                    // Log the current record being processed
-                    logsContainer.innerHTML += `
-                        <p>
-                            <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
-                            <br>
-                            <strong>Record ID:</strong> ${result.record_id || "N/A"} <br>
-                            <strong>Staging Status:</strong> ${result.staging_status || "N/A"} <br>
-                            <strong>CRM Status:</strong> ${result.crm_status || "N/A"} <br>
-                            <strong>Action:</strong> ${result.action || "none"} <br>
-                            <strong style="color: red;">Error:</strong> ${result.error ? `<span style="color: red;">${result.error}</span>` : "none"} <br>
-                            <strong style="color: orange;">Failed Fields:</strong> ${Array.isArray(result.failed_fields) && result.failed_fields.length 
-                                ? `<span style="color: orange;">${result.failed_fields.join(", ")}</span>` 
-                                : "none"} <br>
-                        </p>
-                    `;
-        
-                    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
-                }
-        
-                // Calculate Velocity
-                const endTime = Date.now();
-                const totalTimeTaken = (endTime - startTime) / 1000; // Convert to seconds
-                const velocity = (totalMigratedRecords / totalTimeTaken).toFixed(2);
-                document.getElementById("migrationVelocity").textContent = `${velocity} records/sec`;
-        
-                // Calculate Data Quality
-                const dataQuality = ((totalMigratedRecords - data.error_count) / totalMigratedRecords * 100).toFixed(2);
-                document.getElementById("dataQuality").textContent = `${dataQuality}%`;
-        
-                // Update Errors
-                document.getElementById("totalErrors").textContent = data.error_count;
-                document.getElementById("failedFields").textContent = data.failed_fields?.length || 0;
-        
-                // Log migration summary
-                logsContainer.innerHTML += `
-                    <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
-                    <p>Total Records: ${totalMigratedRecords}</p>
-                    <p>Successfully Migrated: ${data.success_count}</p>
-                    <p>Updated: ${data.update_count}</p>
-                    <p>Inserted: ${data.insert_count}</p>
-                    <p>Failed: ${data.error_count}</p>
-                `;
-        
-                // Update migration summary table
-                const summaryTable = document.getElementById("migrationSummaryTable").getElementsByTagName('tbody')[0];
-                summaryTable.innerHTML = `
-                    <tr>
-                        <td class="px-4 py-2">${data.entity_name}</td>
-                        <td class="px-4 py-2">${totalMigratedRecords}</td>
-                        <td class="px-4 py-2">${data.success_count + data.error_count}</td>
-                        <td class="px-4 py-2">${data.insert_count}</td>
-                        <td class="px-4 py-2">${data.update_count}</td>
-                        <td class="px-4 py-2">${data.error_count}</td>
-                    </tr>
-                `;
+document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
+    const logsContainer = document.getElementById("logsContainer");
+    logsContainer.innerHTML = "";
+    logsContainer.style.display = "block";
+    document.getElementById("metricsSection").style.display = "none"; // Hide metrics initially
+    resetProgressBars();
+    showLoadingSpinner();
 
+    try {
+        const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
+        const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
 
-                // Handle Excel download link
-                if (data.excel_file_url) {
-                    const excelLink = document.getElementById("excelLink");
-                    excelLink.href = data.excel_file_url;
-                    document.getElementById("excelDownload").style.display = "block";
-                }
-                // Show the migration summary table and metrics section
-                document.getElementById("migrationSummary").style.display = "block";
-                document.getElementById("metricsSection").style.display = "block"; // Show metrics section
-        
-                // Update migration status message
-                if (data.error_count === 0) {
-                    document.getElementById("migrationMessage").textContent = "Complete";
-                } else {
-                    document.getElementById("migrationMessage").textContent = "Partial Success";
-                }
-        
-                setTimeout(resetProgressBars, 1000);
-            } catch (error) {
-                console.error("Error:", error);
-                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration: ${error.message}</p>`;
-                document.getElementById("fetchingMessage").textContent = "Fetching: Error";
-                document.getElementById("migrationMessage").textContent = "Migration: Error";
-            } finally {
-                hideLoadingSpinner();
-            }
+        // Update Source and Target in the Metrics Section
+        document.getElementById("sourceEntity").textContent = selectedFaciliooEntity;
+        document.getElementById("targetEntity").textContent = selectedCrmEntity;
+
+        // Log start of migration
+        logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
+
+        // Fetch matched fields for the selected entities
+        const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
+            method: "GET",
+            headers: {"Authorization": `Bearer ${accessToken}`}
         });
-        
+
+        if (!matchedFieldsResponse.ok) {
+            throw new Error("Failed to fetch matched fields.");
+        }
+
+        const matchedFieldsData = await matchedFieldsResponse.json();
+        const matchedFields = matchedFieldsData.matched_fields;
+
+        if (!matchedFields || matchedFields.length === 0) {
+            throw new Error("No matching fields found for the selected entities.");
+        }
+
+        // Log matched fields
+        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved matched fields for migration.</p>`;
+        document.getElementById("fetchingProgress").style.width = "100%";
+        document.getElementById("fetchingMessage").textContent = "Complete";
+
+        // Fetch entity data from staging
+        logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving data for Facilioo entity: <b>${selectedFaciliooEntity}</b> from staging database...</p>`;
+        const entityDataResponse = await fetch(`/get-entity-data?entity_name=${selectedFaciliooEntity}`, {
+            method: "GET",
+            headers: {"Authorization": `Bearer ${accessToken}`}
+        });
+
+        if (!entityDataResponse.ok) {
+            throw new Error("Failed to fetch entity data from staging.");
+        }
+
+        const entityData = await entityDataResponse.json();
+
+        // Check the structure of entityData to find the number of records
+        const totalRecords = entityData.total_records || entityData.data?.length || entityData.length || 0;
+
+        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${totalRecords} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
+
+        // Start migration
+        document.getElementById("migrationMessage").textContent = "Starting migration...";
+        document.getElementById("migrationProgress").style.width = "0%";
+
+        const startTime = Date.now(); // Record start time for velocity calculation
+
+        const response = await fetch("/migrate-entity", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${accessToken}`
+            },
+            body: JSON.stringify({
+                selected_facilioo_entity: selectedFaciliooEntity,
+                selected_crm_entity: selectedCrmEntity
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error("Migration failed.");
+        }
+
+        const data = await response.json();
+        const totalMigratedRecords = data.total_records;
+        let processedRecords = 0;
+
+        // Process migration results
+        for (const result of data.results) {
+            processedRecords++;
+            const progress = (processedRecords / totalMigratedRecords) * 100;
+            document.getElementById("migrationProgress").style.width = `${progress}%`;
+            document.getElementById("migrationMessage").textContent = `Migrating record ${result.record_id}...`;
+
+            // Log the current record being processed
+            logsContainer.innerHTML += `
+                <p>
+                    <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
+                    <br>
+                    <strong>Record ID:</strong> ${result.record_id || "N/A"} <br>
+                    <strong>Staging Status:</strong> ${result.staging_status || "N/A"} <br>
+                    <strong>CRM Status:</strong> ${result.crm_status || "N/A"} <br>
+                    <strong>Action:</strong> ${result.action || "none"} <br>
+                    <strong style="color: red;">Error:</strong> ${result.error ? `<span style="color: red;">${result.error}</span>` : "none"} <br>
+                    <strong style="color: orange;">Failed Fields:</strong> ${Array.isArray(result.failed_fields) && result.failed_fields.length 
+                        ? `<span style="color: orange;">${result.failed_fields.join(", ")}</span>` 
+                        : "none"} <br>
+                </p>
+            `;
+
+            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
+        }
+
+        // Calculate Velocity
+        const endTime = Date.now();
+        const totalTimeTaken = (endTime - startTime) / 1000; // Convert to seconds
+        const velocity = (totalMigratedRecords / totalTimeTaken).toFixed(2);
+        document.getElementById("migrationVelocity").textContent = `${velocity} records/sec`;
+
+        // Calculate Data Quality
+        const dataQuality = ((totalMigratedRecords - data.error_count) / totalMigratedRecords * 100).toFixed(2);
+        document.getElementById("dataQuality").textContent = `${dataQuality}%`;
+
+        // Update Errors
+        document.getElementById("totalErrors").textContent = data.error_count;
+        document.getElementById("failedFields").textContent = data.failed_fields?.length || 0;
+
+        // Update Processed Records Tile
+        document.getElementById("totalProcessedRecords").textContent = totalMigratedRecords;
+        document.getElementById("updatedRecords").textContent = data.update_count;
+        document.getElementById("createdRecords").textContent = data.insert_count;
+
+        // Log migration summary
+        logsContainer.innerHTML += `
+            <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
+            <p>Total Records: ${totalMigratedRecords}</p>
+            <p>Successfully Migrated: ${data.success_count}</p>
+            <p>Updated: ${data.update_count}</p>
+            <p>Inserted: ${data.insert_count}</p>
+            <p>Failed: ${data.error_count}</p>
+        `;
+
+        // Handle Excel download link
+        if (data.excel_file_url) {
+            const excelLink = document.getElementById("excelLink");
+            excelLink.href = data.excel_file_url;
+            document.getElementById("excelDownload").style.display = "block";
+        }
+
+        // Show the metrics section
+        document.getElementById("metricsSection").style.display = "block";
+
+        // Update migration status message
+        if (data.error_count === 0) {
+            document.getElementById("migrationMessage").textContent = "Complete";
+        } else {
+            document.getElementById("migrationMessage").textContent = "Partial Success";
+        }
+
+        setTimeout(resetProgressBars, 1000);
+    } catch (error) {
+        console.error("Error:", error);
+        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration: ${error.message}</p>`;
+        document.getElementById("fetchingMessage").textContent = "Fetching: Error";
+        document.getElementById("migrationMessage").textContent = "Migration: Error";
+    } finally {
+        hideLoadingSpinner();
+    }
+});        
         
         function autoScrollLogs() {
             const logsContainer = document.getElementById("logsContainer");

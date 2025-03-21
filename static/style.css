@@ -198,31 +198,6 @@ input:focus {
     text-decoration: underline;
 }
 
-/* Migration Summary */
-.migration-summary {
-    margin-top: 20px;
-    overflow-x: auto;
-    width: 100%;
-}
-
-/* Table Styling */
-#migrationSummaryTable {
-    width: 100%;
-    table-layout: fixed;
-}
-
-#migrationSummaryTable th,
-#migrationSummaryTable td {
-    padding: 12px;
-    text-align: left;
-    font-size: 14px;
-}
-
-.migration-summary th {
-    background-color: #f7f7f7;
-    color: #5c6bc0;
-}
-
 /* Minimalistic Design */
 #entityControls {
     display: flex;
@@ -305,27 +280,10 @@ input:focus {
         font-size: 24px;
     }
 
-    .migration-summary th,
-    .migration-summary td {
-        padding: 10px;
-    }
-    /* Prevent table overflow */
-    .migration-summary {
-        overflow-x: auto;
-    }
-
-    #migrationSummaryTable {
-        min-width: 600px; /* Ensure table is not squished */
-    }
-
     /* Prevent logs container overflow */
     #logsContainer {
         max-height: 180px; /* Reduce height for smaller screens */
     }
-}
-
-#migrationSummaryTable td {
-    color: #3182ce;
 }
 
 
@@ -363,50 +321,50 @@ input:focus {
 .animate-spin {
     animation: spin 1s linear infinite;
 }
-/* General Styles for Compact Metrics Section */
+
+/* General Styles for Metrics Section */
 #metricsSection {
     font-family: 'Arial', sans-serif;
     color: #333;
-    padding: 8px;
 }
 
 #metricsSection h3 {
-    font-size: 1rem;
+    font-size: 1.5rem;
     font-weight: 600;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
     color: #2d3748;
 }
 
-/* Compact Grid Layout for Metrics */
+/* Grid Layout for Metrics */
 #metricsSection .grid {
     display: grid;
-    gap: 0.5rem;
+    gap: 1rem;
 }
 
-/* Compact Metric Card Styles */
+/* Metric Card Styles */
 #metricsSection .bg-white {
     background-color: #ffffff;
-    border-radius: 0.4rem;
-    padding: 0.8rem;
-    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
-    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 #metricsSection .bg-white:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px -1px rgba(0, 0, 0, 0.15), 0 4px 8px -1px rgba(0, 0, 0, 0.1);
 }
 
 #metricsSection h4 {
-    font-size: 0.95rem;
+    font-size: 1.25rem;
     font-weight: 600;
-    margin-bottom: 0.5rem;
+    margin-bottom: 1rem;
     color: #4a5568;
 }
 
 #metricsSection p {
-    font-size: 0.85rem;
-    margin-bottom: 0.25rem;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
     color: #4a5568;
 }
 
@@ -415,10 +373,10 @@ input:focus {
     color: #2d3748;
 }
 
-/* Responsive Compact Grid for Laptop and Mobile */
+/* Responsive Grid for Laptop and Mobile */
 @media (min-width: 768px) {
     #metricsSection .grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
     }
 }
 
@@ -428,20 +386,23 @@ input:focus {
     }
 
     #metricsSection h3 {
-        font-size: 0.95rem;
+        font-size: 1.25rem;
     }
 
     #metricsSection h4 {
-        font-size: 0.85rem;
+        font-size: 1.1rem;
     }
 
     #metricsSection p {
-        font-size: 0.75rem;
+        font-size: 0.9rem;
     }
 }
 
 /* Additional Styling for Metrics */
 #metricsSection #sourceEntity,
+#metricsSection #totalProcessedRecords,
+#metricsSection #updatedRecords,
+#metricsSection #createdRecords,
 #metricsSection #targetEntity,
 #metricsSection #totalErrors,
 #metricsSection #failedFields,
@@ -459,6 +420,26 @@ input:focus {
 #metricsSection .bg-white:hover p {
     color: #4a5568; /* Change text color on hover */
 }
-.group:hover .group-hover\:block {
-    display: block;
+
+
+
+/* Popup Styling */
+#formulaPopup {
+    top: 100%; /* Position below the Performance section */
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Ensure the popup is hidden by default */
+.hidden {
+    visibility: hidden;
+}
+
+/* Show the popup on hover */
+.bg-white:hover #formulaPopup {
+    opacity: 1;
+    visibility: visible;
 }
