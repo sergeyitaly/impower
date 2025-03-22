@@ -447,3 +447,13 @@ input:focus {
     visibility: hidden;
     opacity: 0;
 }
+
+/* Mobile Styling */
+@media (max-width: 480px) {
+    #formulaPopup {
+        width: 90%; /* Adapt to smaller screens */
+        font-size: 14px;
+        padding: 8px;
+        margin-top: 4px;
+    }
+}

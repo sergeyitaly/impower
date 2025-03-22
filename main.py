@@ -11,7 +11,6 @@ import string
 import json
 from typing import Dict, List
 from sqlalchemy.orm import sessionmaker
-from models import User  # Ensure models.py is in the same directory
 from sqlalchemy import create_engine
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -1292,19 +1291,24 @@ def validate_and_convert_guid(value, entity_name=None):
             else:
                 if entity_name:
                     namespace = uuid.NAMESPACE_OID
-                    return str(uuid.uuid5(namespace, f"{entity_name}_{value}"))
+                    # Combine the entity name and value to generate unique GUIDs per entity
+                    combined_value = f"{entity_name}_{value}"
+                    return str(uuid.uuid5(namespace, combined_value))
                 else:
                     return None
         elif isinstance(value, int):
             if entity_name:
                 namespace = uuid.NAMESPACE_OID
-                return str(uuid.uuid5(namespace, f"{entity_name}_{value}"))
+                # Combine the entity name and value to generate unique GUIDs per entity
+                combined_value = f"{entity_name}_{value}"
+                return str(uuid.uuid5(namespace, combined_value))
             else:
                 return None
         else:
             return None
     except (ValueError, AttributeError, TypeError):
-        return None    
+        return None
+
 
 def anonymize_data(data: str, field_type: str) -> str:
     if not data:
