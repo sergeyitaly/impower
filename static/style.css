@@ -432,13 +432,6 @@ input:focus {
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-/* Show the popup on hover */
-.bg-white:hover #formulaPopup {
-    opacity: 1;
-    visibility: visible;
-}
-
-
 .group:hover .group-hover\:block {
     display: block;
 }
@@ -447,13 +440,30 @@ input:focus {
     visibility: hidden;
     opacity: 0;
 }
-
 /* Mobile Styling */
 @media (max-width: 480px) {
     #formulaPopup {
         width: 90%; /* Adapt to smaller screens */
         font-size: 14px;
         padding: 8px;
-        margin-top: 4px;
+        position: fixed; /* Use fixed positioning to center on the screen */
+        top: 50%; /* Center vertically */
+        left: 50%; /* Center horizontally */
+        transform: translate(-50%, -50%); /* Adjust for exact centering */
+        margin-top: 0; /* Remove margin-top */
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        z-index: 1000; /* Ensure it appears above other content */
+        background-color: white; /* Ensure background is visible */
+        border: 1px solid #ccc; /* Add a border for better visibility */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Add shadow for better visibility */
+    }
+
+    /* Show the popup on hover or touch */
+    .bg-white:hover #formulaPopup,
+    .bg-white:focus-within #formulaPopup {
+        opacity: 1;
+        visibility: visible;
     }
 }
