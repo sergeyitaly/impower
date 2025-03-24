@@ -153,74 +153,181 @@
             <div id="logsContainer" class="mt-4 bg-white p-4 rounded-lg shadow-md" style="display: none; max-height: 300px; overflow-y: auto;"></div>
         </div>
 
-        <!-- Metrics Section -->
-        <div id="metricsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
-            <h3 class="text-xl font-semibold mb-4"><i class="fas fa-chart-line"></i> Migration Metrics</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- Source and Target -->
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Source & Target</h4>
-                    <p><strong>Source:</strong> <span id="sourceEntity">N/A</span></p>
-                    <p><strong>Target:</strong> <span id="targetEntity">N/A</span></p>
-                </div>
-
-
-                <!-- Performance Section -->
-                <div class="bg-white p-4 rounded-lg shadow-md relative group">
-                    <h4 class="text-lg font-semibold mb-2">Performance</h4>
-                    <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
-                    <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
-                    <!-- Popup for Formulas -->
-                    <div id="formulaPopup" class="hidden absolute bg-white p-4 rounded-lg shadow-md border border-gray-200 w-64 text-sm z-10 group-hover:block" style="top: 100%; left: 0;">
-                        <p><strong>Data Quality:</strong></p>
-                        <p>((Total Migrated Records - Total Errors) / Total Migrated Records) × 100</p>
-                        <p class="mt-2"><strong>Velocity:</strong></p>
-                        <p>Total Migrated Records / Total Time Taken (in seconds)</p>
+        <div id="metricsSection" class="d365-dashboard" style="display: none;">
+            <div class="dashboard-header">
+                <h3 class="dashboard-title">
+                    <i class="ms-Icon ms-Icon--Migration"></i> Migration Dashoard
+                </h3>
+                <div class="dashboard-subtitle">Real-time migration metrics and analysis</div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <!-- SUMMARY CARD -->
+                <div class="dashboard-card summary-card">
+                    <div class="card-header">
+                        <i class="ms-Icon ms-Icon--Info"></i>
+                        <h4>Migration Summary</h4>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric-row">
+                            <div class="metric-item">
+                                <div class="metric-label">Source Entity</div>
+                                <div class="metric-value" id="sourceEntity">N/A</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Target Entity</div>
+                                <div class="metric-value" id="targetEntity">N/A</div>
+                            </div>
+                        </div>
+                        <div class="metric-row">
+                            <div class="metric-item">
+                                <div class="metric-label">Total Records</div>
+                                <div class="metric-value highlight" id="totalProcessedRecords">0</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Duration</div>
+                                <div class="metric-value" id="totalDuration">0s</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <!-- Errors -->
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Errors</h4>
-                    <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
-                    <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
+        
+                <!-- PERFORMANCE CARD -->
+                <div class="dashboard-card performance-card">
+                    <div class="card-header">
+                        <i class="ms-Icon ms-Icon--SpeedHigh"></i>
+                        <h4>Performance</h4>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric-item">
+                            <div class="metric-label">Success Rate</div>
+                            <div class="metric-value success" id="successRate">0%</div>
+                            <div class="metric-progress">
+                                <div class="progress-bar" style="width: 0%" id="successRateBar"></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Velocity</div>
+                            <div class="metric-value" id="migrationVelocity">0 rec/sec</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Records/Hour</div>
+                            <div class="metric-value" id="recordsPerHour">0</div>
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Processed Records -->
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Processed</h4>
-                    <p><strong>Total Records:</strong> <span id="totalProcessedRecords">0</span></p>
-                    <p><strong>Updated:</strong> <span id="updatedRecords">0</span></p>
-                    <p><strong>Created:</strong> <span id="createdRecords">0</span></p>
+        
+                <!-- DATA QUALITY CARD -->
+                <div class="dashboard-card quality-card">
+                    <div class="card-header">
+                        <i class="ms-Icon ms-Icon--CheckMark"></i>
+                        <h4>Data Quality</h4>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric-item">
+                            <div class="metric-label">Quality Score</div>
+                            <div class="metric-value" id="dataQuality">0%</div>
+                            <div class="metric-progress">
+                                <div class="progress-bar" style="width: 0%" id="qualityBar"></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Avg Time/Record</div>
+                            <div class="metric-value" id="avgTimePerRecord">0ms</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Data Size</div>
+                            <div class="metric-value" id="dataSize">0 MB</div>
+                        </div>
+                    </div>
                 </div>
-
-
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Success Rate</h4>
-                    <p><strong>Success Rate:</strong> <span id="successRate">0%</span></p>
-                    <p><strong>Failure Rate:</strong> <span id="failureRate">0%</span></p>
+        
+                <!-- FIELD MAPPING CARD -->
+                <div class="dashboard-card mapping-card">
+                    <div class="card-header">
+                        <i class="ms-Icon ms-Icon--MapLayers"></i>
+                        <h4>Field Mapping</h4>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric-item">
+                            <div class="metric-label">Fields/Record</div>
+                            <div class="metric-value" id="fieldsPerRecord">0</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Field Success</div>
+                            <div class="metric-value" id="fieldSuccessRate">0%</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Required Fields</div>
+                            <div class="metric-value" id="requiredFieldsCoverage">0%</div>
+                            <div class="metric-progress">
+                                <div class="progress-bar warning" style="width: 0%" id="requiredFieldsBar"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Time Metrics</h4>
-                    <p><strong>Total Duration:</strong> <span id="totalDuration">0s</span></p>
-                    <p><strong>Avg Time per Record:</strong> <span id="avgTimePerRecord">0ms</span></p>
+        
+                <!-- RECORD ACTIVITY CARD -->
+                <div class="dashboard-card activity-card">
+                    <div class="card-header">
+                        <i class="ms-Icon ms-Icon--Database"></i>
+                        <h4>Record Activity</h4>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric-row">
+                            <div class="metric-item">
+                                <div class="metric-label">Created</div>
+                                <div class="metric-value success" id="createdRecords">0</div>
+                            </div>
+                            <div class="metric-item">
+                                <div class="metric-label">Updated</div>
+                                <div class="metric-value info" id="updatedRecords">0</div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Failed Fields/Rec</div>
+                            <div class="metric-value warning" id="failedFieldsPerRecord">0</div>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Field Mapping</h4>
-                    <p><strong>Fields/Record:</strong> <span id="fieldsPerRecord">0</span></p>
-                    <p><strong>Field Success Rate:</strong> <span id="fieldSuccessRate">0%</span></p>
-                    <p><strong>Failed Fields/Record:</strong> <span id="failedFieldsPerRecord">0</span></p>
+        
+                <!-- ERROR ANALYSIS CARD -->
+                <div class="dashboard-card error-card">
+                    <div class="card-header">
+                        <i class="ms-Icon ms-Icon--Warning"></i>
+                        <h4>Error Analysis</h4>
+                    </div>
+                    <div class="card-content">
+                        <div class="metric-item">
+                            <div class="metric-label">Total Errors</div>
+                            <div class="metric-value danger" id="totalErrors">0</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Failure Rate</div>
+                            <div class="metric-value danger" id="failureRate">0%</div>
+                            <div class="metric-progress">
+                                <div class="progress-bar danger" style="width: 0%" id="failureRateBar"></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-label">Failed Fields</div>
+                            <div class="metric-value" id="failedFields">0</div>
+                        </div>
+                    </div>
                 </div>
-                
-                
-                <div class="bg-white p-4 rounded-lg shadow-md">
-                    <h4 class="text-lg font-semibold mb-2">Data Volume</h4>
-                    <p><strong>Data Size:</strong> <span id="dataSize">0 MB</span></p>
-                    <p><strong>Records/Hour:</strong> <span id="recordsPerHour">0</span></p>
+            </div>
+        
+            <!-- TOOLTIPS -->
+            <div class="dashboard-tooltip" id="formulaPopup">
+                <div class="tooltip-content">
+                    <p><strong>Data Quality:</strong> ((Total Records - Errors) / Total Records) × 100</p>
+                    <p><strong>Velocity:</strong> Total Records / Duration (seconds)</p>
+                    <p><strong>Required Fields:</strong> (Mapped Mandatory Fields / Total Mandatory Fields) × 100</p>
                 </div>
             </div>
         </div>
+
+
         <!-- Excel Download Link -->
         <div id="excelDownload" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
             <a id="excelLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">
@@ -660,6 +767,20 @@
             this.textContent = logsContainer.style.display === "none" ? "Show Logs" : "Hide Logs";
         });
 
+        // Tooltip functionality
+document.querySelectorAll('.dashboard-card').forEach(card => {
+    card.addEventListener('mouseenter', function(e) {
+        const tooltip = document.getElementById('formulaPopup');
+        tooltip.style.left = e.pageX + 'px';
+        tooltip.style.top = (e.pageY + 20) + 'px';
+        tooltip.style.opacity = '1';
+    });
+    
+    card.addEventListener('mouseleave', function() {
+        document.getElementById('formulaPopup').style.opacity = '0';
+    });
+});
+
 document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
     const logsContainer = document.getElementById("logsContainer");
     logsContainer.innerHTML = "";
@@ -693,6 +814,78 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
         const matchedFieldsData = await matchedFieldsResponse.json();
         const matchedFields = matchedFieldsData.matched_fields;
 
+        try {
+            // Fetch CRM entity fields to identify mandatory fields
+            const crmFieldsResponse = await fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+            });
+            
+            if (crmFieldsResponse.ok) {
+                const crmFieldsData = await crmFieldsResponse.json();
+                if (crmFieldsData.success && crmFieldsData.columns) {
+                    // Get all mandatory CRM fields (those with mandatory: true)
+                    const mandatoryFields = crmFieldsData.columns
+                        .filter(col => col && col.mandatory && col.name)
+                        .map(col => col.name.toString().toLowerCase().trim())
+                        .filter(name => name.length > 0);
+                    
+                    // Extract CRM field names from matched fields (format: "faciliooField-crmField [*+]")
+                    const matchedCrmFields = matchedFields
+                        .map(field => {
+                            // Extract the part after the dash and before the symbol
+                            const match = /-\s*([^*+]+)/.exec(field);
+                            return match ? match[1].toLowerCase().trim() : null;
+                        })
+                        .filter(field => field);
+                    
+                    // Debug output (temporary)
+                    console.log("Mandatory Fields:", mandatoryFields);
+                    console.log("Matched CRM Fields:", matchedCrmFields);
+                    
+                    // Count how many mandatory fields are covered by our matched fields
+                    const coveredMandatoryFields = mandatoryFields.filter(mandatoryField => 
+                        matchedCrmFields.some(matchedField => 
+                            matchedField === mandatoryField
+                        )
+                    ).length;
+                    
+                    // Calculate coverage percentage
+                    const coveragePercentage = mandatoryFields.length > 0 
+                        ? ((coveredMandatoryFields / mandatoryFields.length) * 100).toFixed(2)
+                        : "100";
+                        
+                    document.getElementById("requiredFieldsCoverage").textContent = `${coveragePercentage}%`;
+                    
+                    // Enhanced logging
+                    logsContainer.innerHTML += `
+                        <p><i class="fas fa-check-circle"></i> Required Fields Analysis:</p>
+                        <ul>
+                            <li>Total Mandatory CRM Fields: ${mandatoryFields.length}</li>
+                            <li>Mapped Mandatory Fields: ${coveredMandatoryFields}</li>
+                            <li>Coverage: ${coveragePercentage}%</li>
+                        </ul>
+                        <p><small>Mandatory Fields: ${mandatoryFields.join(", ")}</small></p>
+                        <p><small>Matched CRM Fields: ${matchedCrmFields.join(", ")}</small></p>
+                        <p><small>Original Matched Fields: ${JSON.stringify(matchedFields)}</small></p>
+                    `;
+                    autoScrollLogs();
+                }
+            }
+        } catch (error) {
+            console.error("Error calculating required fields coverage:", error);
+            document.getElementById("requiredFieldsCoverage").textContent = "Error";
+            logsContainer.innerHTML += `
+                <p><i class="fas fa-exclamation-triangle"></i> Error calculating coverage: ${error.message}</p>
+                <p><small>Matched Fields: ${JSON.stringify(matchedFields)}</small></p>
+            `;
+            autoScrollLogs();
+        }
+        
+        
         if (!matchedFields || matchedFields.length === 0) {
             throw new Error("No matching fields found for the selected entities.");
         }
