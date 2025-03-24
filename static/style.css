@@ -322,6 +322,7 @@ input:focus {
     animation: spin 1s linear infinite;
 }
 
+
 /* General Styles for Metrics Section */
 #metricsSection {
     font-family: 'Arial', sans-serif;
@@ -397,25 +398,47 @@ input:focus {
         font-size: 0.9rem;
     }
 }
-
-/* Additional Styling for Metrics */
+/* Consistent Styling for All Metric Values */
 #metricsSection #sourceEntity,
+#metricsSection #targetEntity,
+#metricsSection #dataQuality,
+#metricsSection #migrationVelocity,
+#metricsSection #totalErrors,
+#metricsSection #failedFields,
 #metricsSection #totalProcessedRecords,
 #metricsSection #updatedRecords,
 #metricsSection #createdRecords,
-#metricsSection #targetEntity,
+#metricsSection #successRate,
+#metricsSection #failureRate,
+#metricsSection #totalDuration,
+#metricsSection #avgTimePerRecord,
+#metricsSection #fieldsPerRecord,
+#metricsSection #fieldSuccessRate,
+#metricsSection #failedFieldsPerRecord,
+#metricsSection #dataSize,
+#metricsSection #recordsPerHour {
+    color: #3182ce; /* Consistent blue color */
+    font-weight: 500; /* Medium font weight */
+    font-family: inherit; /* Ensures font consistency */
+}
+
 #metricsSection #totalErrors,
-#metricsSection #failedFields,
+#metricsSection #failureRate,
+#metricsSection #failedFieldsPerRecord {
+    color: #e53e3e; /* Red for error-related metrics */
+}
+
 #metricsSection #dataQuality,
-#metricsSection #migrationVelocity {
-    color: #3182ce; /* Blue color for metric values */
-    font-weight: 500;
+#metricsSection #successRate,
+#metricsSection #fieldSuccessRate {
+    color: #38a169; /* Green for success-related metrics */
 }
 
 /* Hover Effects for Metric Cards */
 #metricsSection .bg-white:hover h4 {
     color: #3182ce; /* Change heading color on hover */
 }
+
 
 #metricsSection .bg-white:hover p {
     color: #4a5568; /* Change text color on hover */

@@ -153,48 +153,74 @@
             <div id="logsContainer" class="mt-4 bg-white p-4 rounded-lg shadow-md" style="display: none; max-height: 300px; overflow-y: auto;"></div>
         </div>
 
-<!-- Metrics Section -->
-<div id="metricsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
-    <h3 class="text-xl font-semibold mb-4"><i class="fas fa-chart-line"></i> Migration Metrics</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Source and Target -->
-        <div class="bg-white p-4 rounded-lg shadow-md">
-            <h4 class="text-lg font-semibold mb-2">Source & Target</h4>
-            <p><strong>Source:</strong> <span id="sourceEntity">N/A</span></p>
-            <p><strong>Target:</strong> <span id="targetEntity">N/A</span></p>
-        </div>
+        <!-- Metrics Section -->
+        <div id="metricsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
+            <h3 class="text-xl font-semibold mb-4"><i class="fas fa-chart-line"></i> Migration Metrics</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Source and Target -->
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Source & Target</h4>
+                    <p><strong>Source:</strong> <span id="sourceEntity">N/A</span></p>
+                    <p><strong>Target:</strong> <span id="targetEntity">N/A</span></p>
+                </div>
 
 
-        <!-- Performance Section -->
-        <div class="bg-white p-4 rounded-lg shadow-md relative group">
-            <h4 class="text-lg font-semibold mb-2">Performance</h4>
-            <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
-            <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
-            <!-- Popup for Formulas -->
-            <div id="formulaPopup" class="hidden absolute bg-white p-4 rounded-lg shadow-md border border-gray-200 w-64 text-sm z-10 group-hover:block" style="top: 100%; left: 0;">
-                <p><strong>Data Quality:</strong></p>
-                <p>((Total Migrated Records - Total Errors) / Total Migrated Records) × 100</p>
-                <p class="mt-2"><strong>Velocity:</strong></p>
-                <p>Total Migrated Records / Total Time Taken (in seconds)</p>
+                <!-- Performance Section -->
+                <div class="bg-white p-4 rounded-lg shadow-md relative group">
+                    <h4 class="text-lg font-semibold mb-2">Performance</h4>
+                    <p><strong>Data Quality:</strong> <span id="dataQuality">0%</span></p>
+                    <p><strong>Velocity:</strong> <span id="migrationVelocity">0 records/sec</span></p>
+                    <!-- Popup for Formulas -->
+                    <div id="formulaPopup" class="hidden absolute bg-white p-4 rounded-lg shadow-md border border-gray-200 w-64 text-sm z-10 group-hover:block" style="top: 100%; left: 0;">
+                        <p><strong>Data Quality:</strong></p>
+                        <p>((Total Migrated Records - Total Errors) / Total Migrated Records) × 100</p>
+                        <p class="mt-2"><strong>Velocity:</strong></p>
+                        <p>Total Migrated Records / Total Time Taken (in seconds)</p>
+                    </div>
+                </div>
+
+                <!-- Errors -->
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Errors</h4>
+                    <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
+                    <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
+                </div>
+
+                <!-- Processed Records -->
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Processed</h4>
+                    <p><strong>Total Records:</strong> <span id="totalProcessedRecords">0</span></p>
+                    <p><strong>Updated:</strong> <span id="updatedRecords">0</span></p>
+                    <p><strong>Created:</strong> <span id="createdRecords">0</span></p>
+                </div>
+
+
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Success Rate</h4>
+                    <p><strong>Success Rate:</strong> <span id="successRate">0%</span></p>
+                    <p><strong>Failure Rate:</strong> <span id="failureRate">0%</span></p>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Time Metrics</h4>
+                    <p><strong>Total Duration:</strong> <span id="totalDuration">0s</span></p>
+                    <p><strong>Avg Time per Record:</strong> <span id="avgTimePerRecord">0ms</span></p>
+                </div>
+                
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Field Mapping</h4>
+                    <p><strong>Fields/Record:</strong> <span id="fieldsPerRecord">0</span></p>
+                    <p><strong>Field Success Rate:</strong> <span id="fieldSuccessRate">0%</span></p>
+                    <p><strong>Failed Fields/Record:</strong> <span id="failedFieldsPerRecord">0</span></p>
+                </div>
+                
+                
+                <div class="bg-white p-4 rounded-lg shadow-md">
+                    <h4 class="text-lg font-semibold mb-2">Data Volume</h4>
+                    <p><strong>Data Size:</strong> <span id="dataSize">0 MB</span></p>
+                    <p><strong>Records/Hour:</strong> <span id="recordsPerHour">0</span></p>
+                </div>
             </div>
         </div>
-
-        <!-- Errors -->
-        <div class="bg-white p-4 rounded-lg shadow-md">
-            <h4 class="text-lg font-semibold mb-2">Errors</h4>
-            <p><strong>Total Errors:</strong> <span id="totalErrors">0</span></p>
-            <p><strong>Failed Fields:</strong> <span id="failedFields">0</span></p>
-        </div>
-
-        <!-- Processed Records -->
-        <div class="bg-white p-4 rounded-lg shadow-md">
-            <h4 class="text-lg font-semibold mb-2">Processed</h4>
-            <p><strong>Total Records:</strong> <span id="totalProcessedRecords">0</span></p>
-            <p><strong>Updated:</strong> <span id="updatedRecords">0</span></p>
-            <p><strong>Created:</strong> <span id="createdRecords">0</span></p>
-        </div>
-    </div>
-</div>
         <!-- Excel Download Link -->
         <div id="excelDownload" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
             <a id="excelLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">
@@ -764,7 +790,44 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
         document.getElementById("totalProcessedRecords").textContent = totalMigratedRecords;
         document.getElementById("updatedRecords").textContent = data.update_count;
         document.getElementById("createdRecords").textContent = data.insert_count;
+        const successRate = ((data.success_count / totalMigratedRecords) * 100).toFixed(2);
+        const failureRate = ((data.error_count / totalMigratedRecords) * 100).toFixed(2);
+        document.getElementById("successRate").textContent = `${successRate}%`;
+        document.getElementById("failureRate").textContent = `${failureRate}%`;
 
+
+        const totalDuration = (endTime - startTime) / 1000; // seconds
+        const avgTimePerRecord = ((endTime - startTime) / totalMigratedRecords).toFixed(2); // ms
+    
+        document.getElementById("totalDuration").textContent = `${totalDuration}s`;
+        document.getElementById("avgTimePerRecord").textContent = `${avgTimePerRecord}ms`;
+            
+        // In your frontend processing loop
+        // After getting matchedFields from /get-matching-fields
+        const fieldsPerRecord = matchedFields.length;
+
+        // During results processing
+        let totalFailedFields = 0;
+        data.results.forEach(result => {
+            totalFailedFields += result.failed_fields?.length || 0;
+        });
+
+        const totalFieldMappings = fieldsPerRecord * data.total_records;
+        const fieldSuccessRate = totalFieldMappings > 0 
+            ? (((totalFieldMappings - totalFailedFields) / totalFieldMappings) * 100).toFixed(2)
+            : "0%";
+
+        // Update the dashboard
+        document.getElementById("fieldsPerRecord").textContent = fieldsPerRecord;
+        document.getElementById("fieldSuccessRate").textContent = `${fieldSuccessRate}%`;
+        document.getElementById("failedFieldsPerRecord").textContent = 
+            (totalFailedFields / data.total_records).toFixed(2);
+        // Approximate data size (very rough estimate)
+        const avgRecordSize = 1024; // 1KB per record
+        const dataSizeMB = ((totalMigratedRecords * avgRecordSize) / (1024 * 1024)).toFixed(2);
+        const recordsPerHour = ((totalMigratedRecords / totalDuration) * 3600).toFixed(0);
+        document.getElementById("dataSize").textContent = `${dataSizeMB} MB`;
+        document.getElementById("recordsPerHour").textContent = recordsPerHour;
         // Log migration summary
         logsContainer.innerHTML += `
             <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
