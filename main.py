@@ -917,13 +917,66 @@ async def refresh_token(refresh_token: str):
 
 
 def correct_entity_name(entity_name: str) -> str:
-    # Handling special pluralization cases
+    special_cases = {
+        'documentindex': 'documentindexes',
+        'index': 'indices',
+        'matrix': 'matrices',
+        'vertex': 'vertices',
+        'child': 'children',
+        'person': 'people',
+        'mouse': 'mice',
+        'goose': 'geese',
+        'tooth': 'teeth',
+        'foot': 'feet',
+        'ox': 'oxen',
+        'man': 'men',
+        'woman': 'women',
+        'cactus': 'cacti',
+        'fungus': 'fungi',
+        'nucleus': 'nuclei',
+        'syllabus': 'syllabi',
+        'focus': 'foci',
+        'radius': 'radii',
+        'analysis': 'analyses',
+        'basis': 'bases',
+        'crisis': 'crises',
+        'thesis': 'theses',
+        'datum': 'data',
+        'medium': 'media',
+        'bacterium': 'bacteria',
+        'curriculum': 'curricula',
+        'alumnus': 'alumni',
+        'addendum': 'addenda',
+        'corpus': 'corpora',
+        'genus': 'genera',
+        'appendix': 'appendices',
+        'vortex': 'vortices',
+        'locus': 'loci'
+    }
+    
+    if entity_name.endswith(('s', 'es', 'ies')) or entity_name in special_cases.values():
+        return entity_name
+    if entity_name in special_cases:
+        return special_cases[entity_name]
     if entity_name.endswith('y'):
-        return entity_name[:-1] + 'ies'  # For words ending in 'y', change to 'ies'
-    elif entity_name.endswith('s'):
-        return entity_name  # Already plural, no change
-    else:
-        return entity_name + 's'  # General case: add 's'
+        if len(entity_name) > 1 and entity_name[-2] not in 'aeiou':
+            return entity_name[:-1] + 'ies'
+        else:
+            return entity_name + 's'
+    if entity_name.endswith('f'):
+        return entity_name[:-1] + 'ves'
+    elif entity_name.endswith('fe'):
+        return entity_name[:-2] + 'ves'
+    if entity_name.endswith('o'):
+        if len(entity_name) > 1 and entity_name[-2] not in 'aeiou':
+            return entity_name + 'es'
+        else:
+            return entity_name + 's'
+    if entity_name.endswith(('s', 'x', 'z', 'ch', 'sh')):
+        return entity_name + 'es'
+    
+    # Default case: add 's'
+    return entity_name + 's'
     
     
 # Function to get CRM access token
@@ -1288,26 +1341,18 @@ def validate_and_convert_guid(value, entity_name=None):
                 return str(uuid.UUID(value))
             elif len(value) == 32 and all(c in '0123456789abcdefABCDEF' for c in value):
                 return str(uuid.UUID(value))
-            else:
-                if entity_name:
-                    namespace = uuid.NAMESPACE_OID
-                    # Combine the entity name and value to generate unique GUIDs per entity
-                    combined_value = f"{entity_name}_{value}"
-                    return str(uuid.uuid5(namespace, combined_value))
-                else:
-                    return None
-        elif isinstance(value, int):
-            if entity_name:
+            elif entity_name:
                 namespace = uuid.NAMESPACE_OID
-                # Combine the entity name and value to generate unique GUIDs per entity
                 combined_value = f"{entity_name}_{value}"
                 return str(uuid.uuid5(namespace, combined_value))
-            else:
-                return None
-        else:
-            return None
+        elif isinstance(value, int) and entity_name:
+            namespace = uuid.NAMESPACE_OID
+            combined_value = f"{entity_name}_{value}"
+            return str(uuid.uuid5(namespace, combined_value))
     except (ValueError, AttributeError, TypeError):
         return None
+    return None
+
 
 
 def anonymize_data(data: str, field_type: str) -> str:
@@ -1383,19 +1428,37 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
         # Check if the facilioo_field exists in the entity data
         if facilioo_field in entity_data:
             field_value = entity_data[facilioo_field]
+            
+            # Handle null values first
+            if field_value is None:
+                crm_data[crm_field] = None
+                continue
+                
+            # Handle array values
+            if isinstance(field_value, (list, tuple)):
+                crm_data[crm_field] = list(field_value)
+                continue
+                
+            # Handle complex objects (assuming we need to add @odata.type)
+            if isinstance(field_value, dict):
+                # Add @odata.type annotation if not present
+                if '@odata.type' not in field_value:
+                    field_value['@odata.type'] = f"Microsoft.Dynamics.CRM.{crm_field}"
+                crm_data[crm_field] = field_value
+                continue
+
             # Convert to numeric if possible
             if isinstance(field_value, str) and field_value.replace('.', '', 1).isdigit():
                 field_value = float(field_value) if '.' in field_value else int(field_value)
 
-            # Handle GUID fields (e.g., attributeid)
-            if crm_field.lower().endswith('id') and crm_field.lower() != 'id':
-                # Generate entity-specific GUID
+            # Handle special ID fields
+            if crm_field.lower().endswith('id'):  # Corrected to check if crm_field ends with 'id'
                 guid_value = validate_and_convert_guid(field_value, selected_crm_entity)
                 if guid_value:
-                    crm_data[crm_field] = guid_value
+                    crm_data[crm_field] = guid_value  # Assign GUID directly
                 else:
-                    logger.warning(f"Invalid GUID value for field '{crm_field}'. Skipping field.")
-                    failed_fields.append(f"{facilioo_field}-{crm_field}")  # Track failed field pair      
+                    logger.warning(f"Invalid GUID value for '{crm_field}'. Skipping field.")
+                    failed_fields.append(f"{facilioo_field}-{crm_field}")
 
             else:
                 # Anonymize sensitive data based on field type
@@ -1512,7 +1575,7 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
             "error": str(e),
             "failed_fields": failed_fields
         }
-
+    
 
 def export_all_entity_to_excel(data: list, entity_name: str) -> str:
     from openpyxl import Workbook
