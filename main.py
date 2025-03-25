@@ -1751,6 +1751,7 @@ def fetch_entity_data_in_chunks(db: Session, entity_name: str, matched_fields: l
 class MigrateEntityRequest(BaseModel):
     selected_facilioo_entity: str
     selected_crm_entity: str
+    limit_records: Optional[int] = None  # Make sure this matches the case exactly
 
 
 class MigrateResponse(BaseModel):
@@ -1817,6 +1818,7 @@ async def migrate_entity(
 ):
     selected_facilioo_entity = table_entity_name(request.selected_facilioo_entity)
     selected_crm_entity = request.selected_crm_entity
+    limit_records = request.limit_records  # Get the limit from the request
 
     # Fetch matched fields
     matched_fields_response = await get_matching_fields(selected_facilioo_entity, selected_crm_entity, authorization)
@@ -1830,6 +1832,11 @@ async def migrate_entity(
 
     if not entity_data:
         raise HTTPException(status_code=400, detail="No records found in the staging database.")
+
+    # Apply record limit if specified
+    if limit_records and limit_records > 0:
+        entity_data = entity_data[:limit_records]
+        logger.info(f"Limiting migration to first {limit_records} records")
 
     total_records = len(entity_data)
     success_count = 0
@@ -1858,7 +1865,7 @@ async def migrate_entity(
                 error_count += 1
 
             # Track failed fields
-            failed_fields = crm_result.get("failed_fields", [])  # Ensure this is returned from migrate_entity_to_crm
+            failed_fields = crm_result.get("failed_fields", [])
 
             # Add the record to the export data
             data_to_export.append(record)
@@ -1870,7 +1877,7 @@ async def migrate_entity(
                 "crm_status": "Success" if crm_result["success"] else "Failed",
                 "action": crm_result.get("action", "none"),
                 "error": crm_result.get("error", None),
-                "failed_fields": failed_fields  # Include failed fields in the result
+                "failed_fields": failed_fields
             })
 
         except Exception as e:
@@ -1881,10 +1888,10 @@ async def migrate_entity(
                 "staging_status": "Failed",
                 "crm_status": "Failed",
                 "error": str(e),
-                "failed_fields": []  # No specific fields failed, just a general error
+                "failed_fields": []
             })
 
-    # Export data to Excel
+    # Export data to Excel (only the processed records)
     try:
         excel_file_path = export_entity_to_excel(data_to_export, selected_crm_entity, matched_fields_list)
         background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=180)
@@ -1902,7 +1909,6 @@ async def migrate_entity(
         "results": results,
         "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
     }
-
 
 def log_migration_result(user_id: int, staging_status: str, crm_status: str, crm_entity_updated: bool, error_message: str = None):
     db = SessionLocal()

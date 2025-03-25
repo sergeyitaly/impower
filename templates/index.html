@@ -107,7 +107,7 @@
         </div>
         
 
-        <!-- Migration Button -->
+        <!--
         <div id="migrationControls" class="text-center mt-8" style="display: none;">
             <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200" style="display: none;">
                 <i class="fas fa-sync-alt"></i> Start Accounts Migration
@@ -116,8 +116,23 @@
                 <i class="fas fa-sync-alt"></i> Migration
             </button>
         </div>
+ Migration Button -->
 
-
+<!-- Migration Controls with 10 records checkbox -->
+<div id="migrationControls" class="text-center mt-8" style="display: none;">
+    <div class="flex items-center justify-center gap-4">
+        <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200" style="display: none;">
+            <i class="fas fa-sync-alt"></i> Migration Controls
+        </button>
+        <button id="migrateEntityBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
+            <i class="fas fa-sync-alt"></i> Migration
+        </button>
+        <div class="flex items-center">
+            <input type="checkbox" id="limitRecordsCheckbox" class="mr-2 h-4 w-4">
+            <label for="limitRecordsCheckbox">10 records</label>
+        </div>
+    </div>
+</div>
 
         <!-- Progress Bars -->
         <div id="progressContainer" class="mt-8 max-w-2xl mx-auto" style="display: none;">
@@ -354,9 +369,10 @@
             let isDropdownChanged = false; // Flag to track dropdown changes
             const saveMatchingBtn = $("#saveMatchingBtn");
             saveMatchingBtn.hide();
-            const migrateEntityBtn = $("#migrateEntityBtn");
-            migrateEntityBtn.hide();
-
+            //const migrateEntityBtn = $("#migrateEntityBtn");
+            //migrateEntityBtn.hide();
+            const migrationControls = $("#migrationControls");
+            migrationControls.hide();
             $("#matchedFieldsDropdown").select2({
                 placeholder: "Select matched fields",
                 allowClear: true,
@@ -434,13 +450,15 @@
                     const result = await response.json();
                     if (response.ok) {
                         logsContainer.innerHTML += `<p style="color: green;">✅ ${result.message}</p>`;autoScrollLogs();
-                        migrateEntityBtn.show();
+                        //migrateEntityBtn.show();
+                        migrationControls.show();
                     } else {logsContainer.innerHTML += `<p style="color: red;">❌ Error: ${result.detail}</p>`;autoScrollLogs();
                     }
                     isDropdownChanged = false;
                     saveMatchingBtn.hide();
                     matchedFieldsDropdownContainer.style.display = "none";
-                    migrateEntityBtn.show();
+                    //migrateEntityBtn.show();
+                    migrationControls.show();
 
         
 
@@ -456,7 +474,8 @@
                 const selectedFaciliooEntity = $("#entitySelect").val();
                 const selectedCrmEntity = $("#entitySelectCRM").val();
                 const logsContainer = document.getElementById("logsContainer");
-                const migrateEntityBtn = $("#migrateEntityBtn");
+                //const migrateEntityBtn = $("#migrateEntityBtn");
+                const migrationControls = $('#migrationControls')
                 const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
                 const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
 
@@ -515,7 +534,9 @@
             
                             tableHTML += `</tbody></table>`;
                             logsContainer.innerHTML = tableHTML;
-                            migrateEntityBtn.show();
+                            //migrateEntityBtn.show();
+                            migrationControls.show();
+                        
                         } else {
                             // Hide the dropdown and display a message
                             matchedFieldsDropdownContainer.style.display = "none"; // Hide the dropdown container
@@ -526,7 +547,8 @@
                                 <hr>
                                 No matching fields found.
                             `;
-                            migrateEntityBtn.hide();
+                            //migrateEntityBtn.hide();
+                            migrationControls.hide();
                         }
             
                         autoScrollLogs();
@@ -792,6 +814,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
     try {
         const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
         const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
+        const limitRecords = document.getElementById("limitRecordsCheckbox").checked;
         document.getElementById("progressContainer").style.display = "block";
 
         // Update Source and Target in the Metrics Section
@@ -800,6 +823,9 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
 
         // Log start of migration
         logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
+        if (limitRecords) {
+            logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> <b>Limited to first 10 records</b> (or fewer if less available)</p>`;
+        }
 
         // Fetch matched fields for the selected entities
         const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
@@ -885,7 +911,6 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
             autoScrollLogs();
         }
         
-        
         if (!matchedFields || matchedFields.length === 0) {
             throw new Error("No matching fields found for the selected entities.");
         }
@@ -927,7 +952,8 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
             },
             body: JSON.stringify({
                 selected_facilioo_entity: selectedFaciliooEntity,
-                selected_crm_entity: selectedCrmEntity
+                selected_crm_entity: selectedCrmEntity,
+                limit_records: limitRecords ? 10 : null // Send limit parameter if checkbox is checked
             }),
         });
 
@@ -987,7 +1013,6 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
         const failureRate = ((data.error_count / totalMigratedRecords) * 100).toFixed(2);
         document.getElementById("successRate").textContent = `${successRate}%`;
         document.getElementById("failureRate").textContent = `${failureRate}%`;
-
 
         const totalDuration = (endTime - startTime) / 1000; // seconds
         const avgTimePerRecord = ((endTime - startTime) / totalMigratedRecords).toFixed(2); // ms
@@ -1060,7 +1085,6 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
         hideLoadingSpinner();
     }
 });        
-        
         function autoScrollLogs() {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.scrollTop = logsContainer.scrollHeight; // Scroll to the bottom
@@ -1092,7 +1116,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 const data = await response.json();
                 accessToken = data.access_token; // Store token globally
                 document.getElementById("authForm").style.display = "none";
-                document.getElementById("migrationControls").style.display = "block";
+                document.getElementById("migrationControls").style.display = "none";
                 document.getElementById("matchControls").style.display = "block";
                 document.getElementById("progressContainer").style.display = "block";
                 document.getElementById("logsSection").style.display = "block";
