@@ -322,13 +322,6 @@ input:focus {
     animation: spin 1s linear infinite;
 }
 
-.d365-dashboard {
-    font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
-    color: #323130;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-}
 
 .dashboard-header {
     margin-bottom: 24px;
@@ -486,3 +479,5 @@ input:focus {
 .ms-Icon--MapLayers:before { content: '\E81E'; }
 .ms-Icon--Database:before { content: '\EFC7'; }
 .ms-Icon--Warning:before { content: '\E7BA'; }
+
+

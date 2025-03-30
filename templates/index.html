@@ -57,92 +57,96 @@
             </button>
         </div>
 
-        <!-- Entity Selection and Fetch Buttons -->
-        <div id="entityControls" class="flex justify-center gap-2 mt-4" style="display: none;">
-            <!-- Facilioo Entity Section -->
-            <div class="bg-white p-4 rounded border text-center">
-                <label for="entitySelect" class="block text-xs font-medium text-gray-600 mb-1">Facilioo Entity</label>
-                <select id="entitySelect" class="block w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm">
-                    <option value="">-- Select --</option>
-                </select>
-                <button id="fetchEntityBtn" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
-                    <i class="fas fa-download"></i> Fetch to DB and Excel
-                </button>
-            </div>
-
-            <!-- CRM Entity Section -->
-            <div class="bg-white p-4 rounded border text-center">
-                <label for="entitySelectCRM" class="block text-xs font-medium text-gray-600 mb-1">CRM Entity</label>
-                <select id="entitySelectCRM" class="block w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm">
-                    <option value="">-- Select --</option>
-                </select>
-                <button id="fetchEntityBtnCRM" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
-                    <i class="fas fa-download"></i> Show Fields
-                </button>
-            </div>
-        </div>
-
-<!-- Match Entities Button -->
-<div class="text-center mt-4" id="matchControls" style="display: none;">
-    <button id="matchEntitiesBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
-        <i class="fas fa-exchange-alt"></i> Match Entities
-    </button>
-</div>
-
-        <!-- Dropdown for Matched Fields -->
-        <div class="text-center mt-4" id="matchedFieldsDropdownContainer" style="display: none;">
-            <label for="matchedFieldsDropdown" class="block text-sm font-medium text-gray-700">
-                Select Matched Fields:
-            </label>
-            <select id="matchedFieldsDropdown" multiple size="6"
-                class="mt-1 block w-160 mx-auto px-3 py-2 border border-gray-400 rounded-lg shadow-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
-                <!-- Options will be populated dynamically -->
+<div id="matchingControls" class="border-2 border-gray-300 rounded-lg bg-gray-50 mx-2 sm:mx-0" style="display: none;">
+    <div class="space-y-4 p-4">
+    <!-- Entity Selection and Fetch Buttons -->
+    <div id="entityControls" class="flex justify-center gap-2 mt-4" style="display: none;">
+        <!-- Facilioo Entity Section -->
+        <div class="bg-white p-4 rounded border text-center">
+            <label for="entitySelect" class="block text-xs font-medium text-gray-600 mb-1">Facilioo Entity</label>
+            <select id="entitySelect" class="block w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm">
+                <option value="">-- Select --</option>
             </select>
-        </div>
-
-        <div class="text-center mt-4" id="saveMatchingBtnContainer" style="display: none;">
-            <button id="saveMatchingBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
-                Save Matching
+            <button id="fetchEntityBtn" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
+                <i class="fas fa-download"></i> Fetch to DB and Excel
             </button>
         </div>
-        
 
-        <!--
-        <div id="migrationControls" class="text-center mt-8" style="display: none;">
-            <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200" style="display: none;">
-                <i class="fas fa-sync-alt"></i> Start Accounts Migration
+        <!-- CRM Entity Section -->
+        <div class="bg-white p-4 rounded border text-center">
+            <label for="entitySelectCRM" class="block text-xs font-medium text-gray-600 mb-1">CRM Entity</label>
+            <select id="entitySelectCRM" class="block w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm">
+                <option value="">-- Select --</option>
+            </select>
+            <button id="fetchEntityBtnCRM" class="bg-blue-500 text-white w-full py-1 mt-2 rounded hover:bg-blue-600 text-sm">
+                <i class="fas fa-download"></i> Show Fields
             </button>
-            <button id="migrateEntityBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
-                <i class="fas fa-sync-alt"></i> Migration
-            </button>
-        </div>
- Migration Button -->
-
-<!-- Migration Controls with 10 records checkbox -->
-<div id="migrationControls" class="text-center mt-8" style="display: none;">
-    <div class="flex items-center justify-center gap-4">
-        <button id="migrateBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200" style="display: none;">
-            <i class="fas fa-sync-alt"></i> Migration Controls
-        </button>
-        <button id="migrateEntityBtn" class="bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition duration-200">
-            <i class="fas fa-sync-alt"></i> Migration
-        </button>
-        <div class="flex items-center">
-            <input type="checkbox" id="limitRecordsCheckbox" class="mr-2 h-4 w-4">
-            <label for="limitRecordsCheckbox">10 records</label>
         </div>
     </div>
+
+    <!-- Match Entities Button -->
+    <div class="text-center" id="matchControls" style="display: none;">
+        <button id="matchEntitiesBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
+            <i class="fas fa-exchange-alt"></i> Match Entities
+        </button>
+    </div>
+
+    <!-- Dropdown for Matched Fields -->
+    <div class="text-center" id="matchedFieldsDropdownContainer" style="display: none;">
+        <label for="matchedFieldsDropdown" class="block text-sm font-medium text-gray-700">
+            Select Matched Fields:
+        </label>
+        <select id="matchedFieldsDropdown" multiple size="6"
+            class="mt-1 block w-160 mx-auto px-3 py-2 border border-gray-400 rounded-lg shadow-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            <!-- Options will be populated dynamically -->
+        </select>
+    </div>
+
+    <!-- Save Matching Button -->
+    <div class="text-center" id="saveMatchingBtnContainer" style="display: none;">
+        <button id="saveMatchingBtn" class="bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
+            Save Matching
+        </button>
+    </div>
+</div>
 </div>
 
-        <!-- Progress Bars -->
-        <div id="progressContainer" class="mt-8 max-w-2xl mx-auto" style="display: none;">
-            <h3 class="text-xl font-semibold mb-4">Migration Progress</h3>
 
-            <!-- Fetching Users Progress -->
-            <div class="mb-6">
+<!-- Migration Section -->
+<div id="migrationSection"class="border-2 border-gray-200 rounded-lg bg-gray-50 mt-8 p-4 sm:p-6"style="display: none;">
+    <!-- Migration Controls -->
+    <div id="migrationControls" class="text-center">
+        <h3 class="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
+            <i class="fas fa-exchange-alt mr-2"></i>Data Migration
+        </h3>
+        
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            <!-- Migration Buttons -->
+            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                <button id="migrateBtn" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition duration-200 text-sm sm:text-base" style="display: none;">
+                    <i class="fas fa-sync-alt mr-2"></i> Migration Controls
+                </button>
+                <button id="migrateEntityBtn" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition duration-200 text-sm sm:text-base">
+                    <i class="fas fa-sync-alt mr-2"></i> Migration
+                </button>
+            </div>
+            
+            <!-- Records Limit Checkbox -->
+                <input type="checkbox" id="limitRecordsCheckbox" class="mr-2 h-4 w-4">
+                <label for="limitRecordsCheckbox" class="text-sm sm:text-base">10 records</label>
+        </div>
+    </div>
+
+    <!-- Progress Bars -->
+    <div id="progressContainer" class="mt-6 max-w-2xl mx-auto" style="display: none;">
+        <div class="space-y-5">
+            <!-- Fetching Progress -->
+            <div>
                 <div class="flex justify-between mb-2">
-                    <span>Fetching</span>
-                    <span id="fetchingMessage">Not Started</span>
+                    <span class="text-sm sm:text-base font-medium text-gray-700">
+                        <i class="fas fa-download mr-1"></i> Fetching Data
+                    </span>
+                    <span id="fetchingMessage" class="text-xs sm:text-sm text-gray-600">Not Started</span>
                 </div>
                 <div class="w-full bg-gray-200 rounded-full h-2.5">
                     <div id="fetchingProgress" class="progress-bar bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
@@ -150,28 +154,27 @@
             </div>
 
             <!-- Migration Progress -->
-            <div class="mb-6">
+            <div>
                 <div class="flex justify-between mb-2">
-                    <span>Migration</span>
-                    <span id="migrationMessage">Not Started</span>
+                    <span class="text-sm sm:text-base font-medium text-gray-700">
+                        <i class="fas fa-exchange-alt mr-1"></i> Migration Process
+                    </span>
+                    <span id="migrationMessage" class="text-xs sm:text-sm text-gray-600">Not Started</span>
                 </div>
                 <div class="w-full bg-gray-200 rounded-full h-2.5">
                     <div id="migrationProgress" class="progress-bar bg-green-500 h-2.5 rounded-full" style="width: 0%"></div>
                 </div>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Logs Section -->
-        <div id="logsSection" class="mt-8 max-w-2xl mx-auto" style="display: none;">
-            <h3 class="text-xl font-semibold mb-4"><i class="fas fa-clipboard-list"></i> Logs</h3>
-            <button id="toggleLogs" class="bg-gray-500 text-white py-1 px-3 rounded-md hover:bg-gray-600 transition duration-200">Show Logs</button>
-            <div id="logsContainer" class="mt-4 bg-white p-4 rounded-lg shadow-md" style="display: none; max-height: 300px; overflow-y: auto;"></div>
-        </div>
 
-        <div id="metricsSection" class="d365-dashboard" style="display: none;">
-            <div class="dashboard-header">
+
+        <div id="metricsSection" class="border-2 border-gray-200 rounded-lg bg-gray-50 mt-8 p-4 sm:p-6" style="display: none;">
+            <div class="dashboard-header text-center">
                 <h3 class="dashboard-title">
-                    <i class="ms-Icon ms-Icon--Migration"></i> Migration Dashoard
+                    <i class="ms-Icon ms-Icon--Migration"></i> Migration Dashboard
                 </h3>
                 <div class="dashboard-subtitle">Real-time migration metrics and analysis</div>
             </div>
@@ -343,6 +346,14 @@
         </div>
 
 
+
+        <!-- Logs Section -->
+        <div id="logsSection" class="border-2 border-gray-200 rounded-lg bg-gray-50 mt-8 p-4 sm:p-6" style="display: none;">
+            <h3 class="text-xl font-semibold mb-4"><i class="fas fa-clipboard-list"></i> Logs</h3>
+            <button id="toggleLogs" class="bg-gray-500 text-white py-1 px-3 rounded-md hover:bg-gray-600 transition duration-200">Show Logs</button>
+            <div id="logsContainer" class="mt-4 bg-white p-4 rounded-lg shadow-md" style="display: none; max-height: 300px; overflow-y: auto;"></div>
+        </div>
+
         <!-- Excel Download Link -->
         <div id="excelDownload" class="mt-8 max-w-2xl mx-auto text-center" style="display: none;">
             <a id="excelLink" href="#" target="_blank" class="text-blue-500 hover:text-blue-600">
@@ -371,8 +382,8 @@
             saveMatchingBtn.hide();
             //const migrateEntityBtn = $("#migrateEntityBtn");
             //migrateEntityBtn.hide();
-            const migrationControls = $("#migrationControls");
-            migrationControls.hide();
+            const migrationSection = $("#migrationSection");
+            migrationSection.hide();
             $("#matchedFieldsDropdown").select2({
                 placeholder: "Select matched fields",
                 allowClear: true,
@@ -451,14 +462,14 @@
                     if (response.ok) {
                         logsContainer.innerHTML += `<p style="color: green;">✅ ${result.message}</p>`;autoScrollLogs();
                         //migrateEntityBtn.show();
-                        migrationControls.show();
+                        migrationSection.show();
                     } else {logsContainer.innerHTML += `<p style="color: red;">❌ Error: ${result.detail}</p>`;autoScrollLogs();
                     }
                     isDropdownChanged = false;
                     saveMatchingBtn.hide();
                     matchedFieldsDropdownContainer.style.display = "none";
                     //migrateEntityBtn.show();
-                    migrationControls.show();
+                    migrationSection.show();
 
         
 
@@ -475,7 +486,7 @@
                 const selectedCrmEntity = $("#entitySelectCRM").val();
                 const logsContainer = document.getElementById("logsContainer");
                 //const migrateEntityBtn = $("#migrateEntityBtn");
-                const migrationControls = $('#migrationControls')
+                const migrationSection = $('#migrationSection')
                 const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
                 const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
 
@@ -535,7 +546,7 @@
                             tableHTML += `</tbody></table>`;
                             logsContainer.innerHTML = tableHTML;
                             //migrateEntityBtn.show();
-                            migrationControls.show();
+                            migrationSection.show();
                         
                         } else {
                             // Hide the dropdown and display a message
@@ -548,7 +559,7 @@
                                 No matching fields found.
                             `;
                             //migrateEntityBtn.hide();
-                            migrationControls.hide();
+                            migrationSection.hide();
                         }
             
                         autoScrollLogs();
@@ -1116,11 +1127,12 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 const data = await response.json();
                 accessToken = data.access_token; // Store token globally
                 document.getElementById("authForm").style.display = "none";
-                document.getElementById("migrationControls").style.display = "none";
+                document.getElementById("migrationSection").style.display = "none";
                 document.getElementById("matchControls").style.display = "block";
                 document.getElementById("progressContainer").style.display = "block";
                 document.getElementById("logsSection").style.display = "block";
                 document.getElementById("entityControls").style.display = "flex";
+                document.getElementById("matchingControls").style.display = "block";
                 document.getElementById("progressContainer").style.display = "none";
 
                 await fetchAndPopulateCrmEntities();
