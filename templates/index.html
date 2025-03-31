@@ -111,240 +111,206 @@
 </div>
 </div>
 
-
 <!-- Migration Section -->
-<div id="migrationSection"class="border-2 border-gray-200 rounded-lg bg-gray-50 mt-8 p-4 sm:p-6"style="display: none;">
-    <!-- Migration Controls -->
-    <div id="migrationControls" class="text-center">
-        <h3 class="text-lg sm:text-xl font-semibold mb-4 text-gray-800">
-            <i class="fas fa-exchange-alt mr-2"></i>Data Migration
-        </h3>
-        
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-            <!-- Migration Buttons -->
-            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <button id="migrateBtn" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition duration-200 text-sm sm:text-base" style="display: none;">
-                    <i class="fas fa-sync-alt mr-2"></i> Migration Controls
-                </button>
-                <button id="migrateEntityBtn" class="bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition duration-200 text-sm sm:text-base">
-                    <i class="fas fa-sync-alt mr-2"></i> Migration
-                </button>
+<div id="migrationSection" class="bg-white rounded-xl shadow-md p-6 mt-8 max-w-5xl mx-auto">
+    <div class="flex flex-col lg:flex-row gap-8">
+        <!-- Configuration Panel -->
+        <div class="flex-1">
+            <div class="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                <h3 class="text-xl font-semibold mb-5 text-gray-800 flex items-center">
+                    <i class="fas fa-cog mr-3 text-blue-500"></i>
+                    Migration Configuration
+                </h3>
+                
+                <!-- Sequence Setup Card -->
+                <div class="bg-white p-4 rounded-lg shadow-sm mb-6">
+                    <h4 class="text-md font-medium mb-3 text-gray-700">Migration Order</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <input type="text" id="sequenceName" 
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                                   placeholder="e.g., Weekly Customer Migration">
+                        </div>
+                        
+                        <!-- Available Entities (moved above the sequence order) -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Available Entitiy Pairs</label>
+                            <div id="availableEntities" class="drag-container border border-gray-300 rounded-lg h-48 p-3 overflow-y-auto bg-gray-50 mb-4">
+                                <!-- Will be populated from matching_table -->
+                            </div>
+                        </div>
+                        
+                        <!-- Current Sequence -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">Migration Sequence Order</label>
+                            <div id="currentSequence" class="drag-container border border-gray-300 rounded-lg h-48 p-3 overflow-y-auto bg-gray-50">
+                                <!-- Will be populated by user -->
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-center space-x-3 pt-2">
+                            <button id="saveSequenceBtn" 
+                                    class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-lg transition flex items-center">
+                                <i class="fas fa-save mr-2"></i> Save
+                            </button>
+                            <button id="deleteSequenceBtn" 
+                                    class="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-lg transition flex items-center" disabled>
+                                <i class="fas fa-trash mr-2"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <!-- Records Limit Checkbox -->
-                <input type="checkbox" id="limitRecordsCheckbox" class="mr-2 h-4 w-4">
-                <label for="limitRecordsCheckbox" class="text-sm sm:text-base">10 records</label>
+
+        </div>
+        
+        <!-- Execution Panel -->
+        <div class="flex-1">
+            <div class="bg-gray-50 p-5 rounded-lg border border-gray-200 h-full">
+                <h3 class="text-xl font-semibold mb-5 text-gray-800 flex items-center">
+                    <i class="fas fa-play-circle mr-3 text-green-500"></i>
+                    Migration Execution
+                </h3>
+                
+                <div class="space-y-6">
+                    <!-- Sequence Selection -->
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        <h4 class="text-md font-medium mb-3 text-gray-700">Select Sequence</h4>
+                        <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                            <select id="selectedSequence" 
+                                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition">
+                                <option value="">-- Select a sequence --</option>
+                                <!-- Will be populated from saved sequences -->
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Migration Controls -->
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div class="flex items-center space-x-3">
+                                <button id="migrateBtn" 
+                                        class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition flex items-center text-sm sm:text-base"
+                                        style="display: none;">
+                                    <i class="fas fa-cogs mr-2"></i> Advanced
+                                </button>
+
+                                <button id="migrateEntityBtn" class="px-4 py-2 rounded-md font-medium transition-colors" disabled>
+                                <i class="fas fa-rocket mr-2"></i>Migration
+                                </button>
+                            </div>
+                            
+                            <div class="flex items-center">
+                                <input type="checkbox" id="limitRecordsCheckbox" class="h-4 w-4 text-blue-500 rounded border-gray-300 focus:ring-blue-200">
+                                <label for="limitRecordsCheckbox" class="ml-2 text-sm text-gray-600">10 records</label>
+                            </div>
+                        </div>
+                        
+                    </div>
+                                <!-- Sequence Help Card -->
+            <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h4 class="text-md font-medium mb-2 text-blue-800 flex items-center">
+                    <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                    How to Create a Migration Sequence
+                </h4>
+                <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1.5 pl-1">
+                    <li>Name your sequence </li>
+                    <li>Drag entity pairs from the Available Entitiy Pairs to the Migration Sequence Order</li>
+                    <li>Arrange them in the order they should be processed</li>
+                    <li>Click "Save" when finished</li>
+                    <li>Select this sequence when running migrations</li>
+                </ol>
+                <div class="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
+                    <i class="fas fa-lightbulb mr-1"></i> <strong>Tip:</strong> Start with reference data (like locations) before transactional data (like work orders)
+                </div>
+            </div>
+                    
+                    <!-- Progress Visualization -->
+                    <div id="progressContainer" class="bg-white p-4 rounded-lg shadow-sm" style="display: none;">
+                        <h4 class="text-md font-medium mb-3 text-gray-700">Migration Progress</h4>
+                        <div class="space-y-5">
+                            <!-- Fetching Progress -->
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700 flex items-center">
+                                        <i class="fas fa-download mr-2 text-blue-500"></i> Fetching Data
+                                    </span>
+                                    <span id="fetchingMessage" class="text-xs text-gray-500">Not Started</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div id="fetchingProgress" class="bg-blue-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Migration Progress -->
+                            <div>
+                                <div class="flex justify-between mb-2">
+                                    <span class="text-sm font-medium text-gray-700 flex items-center">
+                                        <i class="fas fa-exchange-alt mr-2 text-green-500"></i> Migration Process
+                                    </span>
+                                    <span id="migrationMessage" class="text-xs text-gray-500">Not Started</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div id="migrationProgress" class="bg-green-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+</div>
+
+
+<div id="metricsSection" class="border-2 border-gray-200 rounded-lg bg-gray-50 mt-8 p-4 sm:p-6" style="display: none;">
+    <div class="dashboard-header text-center mb-4">
+        <h3 class="dashboard-title text-xl font-bold">
+            <i class="fas fa-tachometer-alt mr-2"></i>Migration Dashboard
+        </h3>
+        <div class="dashboard-subtitle text-sm text-gray-600">Real-time migration metrics</div>
+    </div>
+    
+    <!-- Sequence Progress Bar -->
+    <div id="sequenceProgressContainer" class="mb-4 hidden">
+        <div class="flex justify-between text-xs mb-1">
+            <span>Entity Pair Progress</span>
+            <span id="sequenceProgressText">0/0</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2.5">
+            <div id="sequenceProgressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
         </div>
     </div>
 
-    <!-- Progress Bars -->
-    <div id="progressContainer" class="mt-6 max-w-2xl mx-auto" style="display: none;">
-        <div class="space-y-5">
-            <!-- Fetching Progress -->
-            <div>
-                <div class="flex justify-between mb-2">
-                    <span class="text-sm sm:text-base font-medium text-gray-700">
-                        <i class="fas fa-download mr-1"></i> Fetching Data
-                    </span>
-                    <span id="fetchingMessage" class="text-xs sm:text-sm text-gray-600">Not Started</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2.5">
-                    <div id="fetchingProgress" class="progress-bar bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
-                </div>
-            </div>
+    <!-- Completed Pairs Accordion -->
+    <div id="completedPairsAccordion" class="hidden">
+        <div class="flex items-center justify-between cursor-pointer" id="completedPairsToggle">
+            <h4 class="font-medium">
+                <i class="fas fa-history mr-2"></i>Completed Migrations
+            </h4>
+            <i class="fas fa-chevron-down transition-transform" id="completedPairsChevron"></i>
+        </div>
+        <div id="completedPairsContainer" class="mt-2 space-y-2">
+            <!-- Completed pairs will be inserted here -->
+        </div>
+    </div>
 
-            <!-- Migration Progress -->
+    <!-- Summary Section (Shown when sequence completes) -->
+    <div id="sequenceSummary" class="mt-4 p-4 bg-blue-50 rounded-lg hidden">
+        <div class="flex justify-between items-center">
             <div>
-                <div class="flex justify-between mb-2">
-                    <span class="text-sm sm:text-base font-medium text-gray-700">
-                        <i class="fas fa-exchange-alt mr-1"></i> Migration Process
-                    </span>
-                    <span id="migrationMessage" class="text-xs sm:text-sm text-gray-600">Not Started</span>
-                </div>
-                <div class="w-full bg-gray-200 rounded-full h-2.5">
-                    <div id="migrationProgress" class="progress-bar bg-green-500 h-2.5 rounded-full" style="width: 0%"></div>
-                </div>
+                <h4 class="font-bold"><i class="fas fa-flag-checkered mr-2"></i>Sequence Complete</h4>
+                <div class="text-sm">Total time: <span id="totalSequenceDuration">0s</span></div>
+            </div>
+            <div class="text-right">
+                <div class="text-xl font-bold" id="totalSequenceRecords">0</div>
+                <div class="text-sm">records migrated</div>
             </div>
         </div>
     </div>
 </div>
-
-
-
-        <div id="metricsSection" class="border-2 border-gray-200 rounded-lg bg-gray-50 mt-8 p-4 sm:p-6" style="display: none;">
-            <div class="dashboard-header text-center">
-                <h3 class="dashboard-title">
-                    <i class="ms-Icon ms-Icon--Migration"></i> Migration Dashboard
-                </h3>
-                <div class="dashboard-subtitle">Real-time migration metrics and analysis</div>
-            </div>
-            
-            <div class="dashboard-grid">
-                <!-- SUMMARY CARD -->
-                <div class="dashboard-card summary-card">
-                    <div class="card-header">
-                        <i class="ms-Icon ms-Icon--Info"></i>
-                        <h4>Migration Summary</h4>
-                    </div>
-                    <div class="card-content">
-                        <div class="metric-row">
-                            <div class="metric-item">
-                                <div class="metric-label">Source Entity</div>
-                                <div class="metric-value" id="sourceEntity">N/A</div>
-                            </div>
-                            <div class="metric-item">
-                                <div class="metric-label">Target Entity</div>
-                                <div class="metric-value" id="targetEntity">N/A</div>
-                            </div>
-                        </div>
-                        <div class="metric-row">
-                            <div class="metric-item">
-                                <div class="metric-label">Total Records</div>
-                                <div class="metric-value highlight" id="totalProcessedRecords">0</div>
-                            </div>
-                            <div class="metric-item">
-                                <div class="metric-label">Duration</div>
-                                <div class="metric-value" id="totalDuration">0s</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-        
-                <!-- PERFORMANCE CARD -->
-                <div class="dashboard-card performance-card">
-                    <div class="card-header">
-                        <i class="ms-Icon ms-Icon--SpeedHigh"></i>
-                        <h4>Performance</h4>
-                    </div>
-                    <div class="card-content">
-                        <div class="metric-item">
-                            <div class="metric-label">Success Rate</div>
-                            <div class="metric-value success" id="successRate">0%</div>
-                            <div class="metric-progress">
-                                <div class="progress-bar" style="width: 0%" id="successRateBar"></div>
-                            </div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Velocity</div>
-                            <div class="metric-value" id="migrationVelocity">0 rec/sec</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Records/Hour</div>
-                            <div class="metric-value" id="recordsPerHour">0</div>
-                        </div>
-                    </div>
-                </div>
-        
-                <!-- DATA QUALITY CARD -->
-                <div class="dashboard-card quality-card">
-                    <div class="card-header">
-                        <i class="ms-Icon ms-Icon--CheckMark"></i>
-                        <h4>Data Quality</h4>
-                    </div>
-                    <div class="card-content">
-                        <div class="metric-item">
-                            <div class="metric-label">Quality Score</div>
-                            <div class="metric-value" id="dataQuality">0%</div>
-                            <div class="metric-progress">
-                                <div class="progress-bar" style="width: 0%" id="qualityBar"></div>
-                            </div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Avg Time/Record</div>
-                            <div class="metric-value" id="avgTimePerRecord">0ms</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Data Size</div>
-                            <div class="metric-value" id="dataSize">0 MB</div>
-                        </div>
-                    </div>
-                </div>
-        
-                <!-- FIELD MAPPING CARD -->
-                <div class="dashboard-card mapping-card">
-                    <div class="card-header">
-                        <i class="ms-Icon ms-Icon--MapLayers"></i>
-                        <h4>Field Mapping</h4>
-                    </div>
-                    <div class="card-content">
-                        <div class="metric-item">
-                            <div class="metric-label">Fields/Record</div>
-                            <div class="metric-value" id="fieldsPerRecord">0</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Field Success</div>
-                            <div class="metric-value" id="fieldSuccessRate">0%</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Required Fields</div>
-                            <div class="metric-value" id="requiredFieldsCoverage">0%</div>
-                            <div class="metric-progress">
-                                <div class="progress-bar warning" style="width: 0%" id="requiredFieldsBar"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-        
-                <!-- RECORD ACTIVITY CARD -->
-                <div class="dashboard-card activity-card">
-                    <div class="card-header">
-                        <i class="ms-Icon ms-Icon--Database"></i>
-                        <h4>Record Activity</h4>
-                    </div>
-                    <div class="card-content">
-                        <div class="metric-row">
-                            <div class="metric-item">
-                                <div class="metric-label">Created</div>
-                                <div class="metric-value success" id="createdRecords">0</div>
-                            </div>
-                            <div class="metric-item">
-                                <div class="metric-label">Updated</div>
-                                <div class="metric-value info" id="updatedRecords">0</div>
-                            </div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Failed Fields/Rec</div>
-                            <div class="metric-value warning" id="failedFieldsPerRecord">0</div>
-                        </div>
-                    </div>
-                </div>
-        
-                <!-- ERROR ANALYSIS CARD -->
-                <div class="dashboard-card error-card">
-                    <div class="card-header">
-                        <i class="ms-Icon ms-Icon--Warning"></i>
-                        <h4>Error Analysis</h4>
-                    </div>
-                    <div class="card-content">
-                        <div class="metric-item">
-                            <div class="metric-label">Total Errors</div>
-                            <div class="metric-value danger" id="totalErrors">0</div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Failure Rate</div>
-                            <div class="metric-value danger" id="failureRate">0%</div>
-                            <div class="metric-progress">
-                                <div class="progress-bar danger" style="width: 0%" id="failureRateBar"></div>
-                            </div>
-                        </div>
-                        <div class="metric-item">
-                            <div class="metric-label">Failed Fields</div>
-                            <div class="metric-value" id="failedFields">0</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        
-            <!-- TOOLTIPS -->
-            <div class="dashboard-tooltip" id="formulaPopup">
-                <div class="tooltip-content">
-                    <p><strong>Data Quality:</strong> ((Total Records - Errors) / Total Records) × 100</p>
-                    <p><strong>Velocity:</strong> Total Records / Duration (seconds)</p>
-                    <p><strong>Required Fields:</strong> (Mapped Mandatory Fields / Total Mandatory Fields) × 100</p>
-                </div>
-            </div>
-        </div>
-
 
 
         <!-- Logs Section -->
@@ -462,14 +428,12 @@
                     if (response.ok) {
                         logsContainer.innerHTML += `<p style="color: green;">✅ ${result.message}</p>`;autoScrollLogs();
                         //migrateEntityBtn.show();
-                        migrationSection.show();
                     } else {logsContainer.innerHTML += `<p style="color: red;">❌ Error: ${result.detail}</p>`;autoScrollLogs();
                     }
                     isDropdownChanged = false;
                     saveMatchingBtn.hide();
                     matchedFieldsDropdownContainer.style.display = "none";
                     //migrateEntityBtn.show();
-                    migrationSection.show();
 
         
 
@@ -486,7 +450,6 @@
                 const selectedCrmEntity = $("#entitySelectCRM").val();
                 const logsContainer = document.getElementById("logsContainer");
                 //const migrateEntityBtn = $("#migrateEntityBtn");
-                const migrationSection = $('#migrationSection')
                 const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
                 const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
 
@@ -546,8 +509,8 @@
                             tableHTML += `</tbody></table>`;
                             logsContainer.innerHTML = tableHTML;
                             //migrateEntityBtn.show();
-                            migrationSection.show();
-                        
+
+                            
                         } else {
                             // Hide the dropdown and display a message
                             matchedFieldsDropdownContainer.style.display = "none"; // Hide the dropdown container
@@ -559,7 +522,7 @@
                                 No matching fields found.
                             `;
                             //migrateEntityBtn.hide();
-                            migrationSection.hide();
+
                         }
             
                         autoScrollLogs();
@@ -765,6 +728,71 @@
 
     });
         
+
+    function updatePairDashboard(pair, metrics) {
+        // Update current pair dashboard
+        document.getElementById('currentPairNames').textContent = `${pair.facilio} → ${pair.crm}`;
+        document.getElementById('currentPairRecords').textContent = metrics.totalRecords;
+        document.getElementById('currentPairSuccess').textContent = `${metrics.successRate}%`;
+        document.getElementById('currentPairSpeed').textContent = `${metrics.velocity}/s`;
+        document.getElementById('currentPairCreated').textContent = metrics.created;
+        document.getElementById('currentPairUpdated').textContent = metrics.updated;
+        document.getElementById('currentPairErrors').textContent = metrics.errors;
+        document.getElementById('currentPairDuration').textContent = `${metrics.duration}s`;
+        
+        // Update progress bars
+        document.getElementById('sequenceProgressBar').style.width = `${metrics.sequenceProgress}%`;
+        document.getElementById('sequenceProgressText').textContent = 
+            `${metrics.sequenceCurrent}/${metrics.sequenceTotal}`;
+    }
+    
+    function addCompletedPair(pair, metrics) {
+        const container = document.getElementById('completedPairsContainer');
+        const pairElement = document.createElement('div');
+        pairElement.className = 'completed-pair-item';
+        pairElement.innerHTML = `
+            <div class="completed-pair-header">
+                <span>${pair.facilio} → ${pair.crm}</span>
+                <span class="text-xs">${metrics.duration}s</span>
+            </div>
+            <div class="completed-pair-metrics">
+                <div class="completed-pair-metric">
+                    <span class="font-medium">${metrics.totalRecords}</span>
+                    <span class="text-xs text-gray-500">Records</span>
+                </div>
+                <div class="completed-pair-metric">
+                    <span class="font-medium ${metrics.errors > 0 ? 'text-green-600' : ''}">${metrics.successRate}%</span>
+                    <span class="text-xs text-gray-500">Success</span>
+                </div>
+                <div class="completed-pair-metric">
+                    <span class="font-medium ${metrics.errors > 0 ? 'text-red-600' : ''}">${metrics.errors}</span>
+                    <span class="text-xs text-gray-500">Errors</span>
+                </div>
+            </div>
+        `;
+        container.appendChild(pairElement);
+        
+        // Show accordion if not already visible
+        document.getElementById('completedPairsAccordion').classList.remove('hidden');
+    }
+    
+    // Toggle completed pairs visibility
+    document.getElementById('completedPairsToggle').addEventListener('click', function() {
+        const container = document.getElementById('completedPairsContainer');
+        const chevron = document.getElementById('completedPairsChevron');
+        
+        if (container.classList.contains('max-h-0')) {
+            container.classList.remove('max-h-0');
+            container.classList.add('max-h-[500px]');
+            chevron.classList.add('rotate-180');
+        } else {
+            container.classList.add('max-h-0');
+            container.classList.remove('max-h-[500px]');
+            chevron.classList.remove('rotate-180');
+        }
+    });
+
+
             async function fetchCRMEntityLink(entityName) {
                 try {
                     const response = await fetch(`/crm-entity-link?entity_name=${entityName}`, {
@@ -814,293 +842,491 @@ document.querySelectorAll('.dashboard-card').forEach(card => {
     });
 });
 
+
+document.getElementById('completedPairsToggle').addEventListener('click', function() {
+    const container = document.getElementById('completedPairsContainer');
+    const chevron = document.getElementById('completedPairsChevron');
+    
+    if (container.classList.contains('collapsed')) {
+        container.classList.remove('collapsed');
+        container.classList.add('expanded');
+        chevron.classList.add('rotate-180');
+    } else {
+        container.classList.remove('expanded');
+        container.classList.add('collapsed');
+        chevron.classList.remove('rotate-180');
+    }
+});
+
+// Function to check if migration can be started
+function checkMigrationReady() {
+    const sequenceSelected = document.getElementById("selectedSequence").value;
+    const migrateBtn = document.getElementById("migrateEntityBtn");
+    
+    // Enable button if a sequence is selected
+    if (sequenceSelected) {
+        migrateBtn.classList.add("active");
+        migrateBtn.disabled = false;
+    } else {
+        // For non-sequence migration, check if both entities are selected
+        const facilioEntity = $("#entitySelect").val();
+        const crmEntity = $("#entitySelectCRM").val();
+        
+        if (facilioEntity && crmEntity) {
+            migrateBtn.classList.add("active");
+            migrateBtn.disabled = false;
+        } else {
+            migrateBtn.classList.remove("active");
+            migrateBtn.disabled = true;
+        }
+    }
+}
+
+// Initialize button state on page load
+document.addEventListener("DOMContentLoaded", function() {
+    checkMigrationReady();
+    
+    // Add event listeners to update button state
+    document.getElementById("selectedSequence").addEventListener("change", checkMigrationReady);
+    document.getElementById("entitySelect").addEventListener("change", checkMigrationReady);
+    document.getElementById("entitySelectCRM").addEventListener("change", checkMigrationReady);
+});
+
 document.getElementById("migrateEntityBtn").addEventListener("click", async () => {
     const logsContainer = document.getElementById("logsContainer");
     logsContainer.innerHTML = "";
     logsContainer.style.display = "block";
-    document.getElementById("metricsSection").style.display = "none"; // Hide metrics initially
+    document.getElementById("metricsSection").style.display = "none";
     resetProgressBars();
     showLoadingSpinner();
+    const container = document.getElementById('completedPairsContainer');
+    const chevron = document.getElementById('completedPairsChevron');
+    
+    container.classList.add('collapsed');
+    chevron.classList.remove('rotate-180');
 
     try {
-        const selectedFaciliooEntity = $("#entitySelect").val();  // Get selected Facilioo entity
-        const selectedCrmEntity = $("#entitySelectCRM").val();    // Get selected CRM entity
+        const sequenceName = document.getElementById("selectedSequence").value;
         const limitRecords = document.getElementById("limitRecordsCheckbox").checked;
         document.getElementById("progressContainer").style.display = "block";
 
-        // Update Source and Target in the Metrics Section
-        document.getElementById("sourceEntity").textContent = selectedFaciliooEntity;
-        document.getElementById("targetEntity").textContent = selectedCrmEntity;
-
-        // Log start of migration
-        logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting migration for Facilioo entity: <b>${selectedFaciliooEntity}</b> to CRM entity: <b>${selectedCrmEntity}</b>...</p>`;
-        if (limitRecords) {
-            logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> <b>Limited to first 10 records</b> (or fewer if less available)</p>`;
+        // Initialize dashboard
+        const metricsSection = document.getElementById("metricsSection");
+        const sequenceProgressContainer = document.getElementById("sequenceProgressContainer");
+        const completedPairsAccordion = document.getElementById("completedPairsAccordion");
+        const sequenceSummary = document.getElementById("sequenceSummary");
+        
+        if (sequenceName) {
+            sequenceProgressContainer.classList.remove("hidden");
+            completedPairsAccordion.classList.remove("hidden");
+            sequenceSummary.classList.add("hidden");
+            document.getElementById("completedPairsContainer").innerHTML = "";
+        } else {
+            sequenceProgressContainer.classList.add("hidden");
+            completedPairsAccordion.classList.add("hidden");
+            sequenceSummary.classList.add("hidden");
         }
 
-        // Fetch matched fields for the selected entities
-        const matchedFieldsResponse = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
-            method: "GET",
-            headers: {"Authorization": `Bearer ${accessToken}`}
-        });
+        let entityPairs = [];
+        let isSequenceMigration = false;
 
-        if (!matchedFieldsResponse.ok) {
-            throw new Error("Failed to fetch matched fields.");
-        }
+        if (sequenceName) {
+            isSequenceMigration = true;
+            logsContainer.innerHTML += `<p><i class="fas fa-list-ol"></i> Loading sequence: <b>${sequenceName}</b>...</p>`;
+            autoScrollLogs();
 
-        const matchedFieldsData = await matchedFieldsResponse.json();
-        const matchedFields = matchedFieldsData.matched_fields;
-
-        try {
-            // Fetch CRM entity fields to identify mandatory fields
-            const crmFieldsResponse = await fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
-                method: "GET",
-                headers: {
-                    "Authorization": `Bearer ${accessToken}`,
-                    "Content-Type": "application/json",
-                },
+            const sequenceResponse = await fetch(`/get-migration-sequences/${sequenceName}`, {
+                headers: {'Authorization': 'Bearer ' + localStorage.getItem('authToken')}
             });
-            
-            if (crmFieldsResponse.ok) {
-                const crmFieldsData = await crmFieldsResponse.json();
-                if (crmFieldsData.success && crmFieldsData.columns) {
-                    // Get all mandatory CRM fields (those with mandatory: true)
-                    const mandatoryFields = crmFieldsData.columns
-                        .filter(col => col && col.mandatory && col.name)
-                        .map(col => col.name.toString().toLowerCase().trim())
-                        .filter(name => name.length > 0);
-                    
-                    // Extract CRM field names from matched fields (format: "faciliooField-crmField [*+]")
-                    const matchedCrmFields = matchedFields
-                        .map(field => {
-                            // Extract the part after the dash and before the symbol
-                            const match = /-\s*([^*+]+)/.exec(field);
-                            return match ? match[1].toLowerCase().trim() : null;
-                        })
-                        .filter(field => field);
-                    
-                    // Debug output (temporary)
-                    console.log("Mandatory Fields:", mandatoryFields);
-                    console.log("Matched CRM Fields:", matchedCrmFields);
-                    
-                    // Count how many mandatory fields are covered by our matched fields
-                    const coveredMandatoryFields = mandatoryFields.filter(mandatoryField => 
-                        matchedCrmFields.some(matchedField => 
-                            matchedField === mandatoryField
-                        )
-                    ).length;
-                    
-                    // Calculate coverage percentage
-                    const coveragePercentage = mandatoryFields.length > 0 
-                        ? ((coveredMandatoryFields / mandatoryFields.length) * 100).toFixed(2)
-                        : "100";
-                        
-                    document.getElementById("requiredFieldsCoverage").textContent = `${coveragePercentage}%`;
-                    
-                    // Enhanced logging
-                    logsContainer.innerHTML += `
-                        <p><i class="fas fa-check-circle"></i> Required Fields Analysis:</p>
-                        <ul>
-                            <li>Total Mandatory CRM Fields: ${mandatoryFields.length}</li>
-                            <li>Mapped Mandatory Fields: ${coveredMandatoryFields}</li>
-                            <li>Coverage: ${coveragePercentage}%</li>
-                        </ul>
-                        <p><small>Mandatory Fields: ${mandatoryFields.join(", ")}</small></p>
-                        <p><small>Matched CRM Fields: ${matchedCrmFields.join(", ")}</small></p>
-                        <p><small>Original Matched Fields: ${JSON.stringify(matchedFields)}</small></p>
-                    `;
-                    autoScrollLogs();
-                }
+
+            if (!sequenceResponse.ok) {
+                throw new Error("Failed to load sequence details");
             }
-        } catch (error) {
-            console.error("Error calculating required fields coverage:", error);
-            document.getElementById("requiredFieldsCoverage").textContent = "Error";
+
+            const sequence = await sequenceResponse.json();
+            entityPairs = sequence.entity_names.map(pair => {
+                const separator = pair.includes('-') ? '-' : ' ';
+                const parts = pair.split(separator);
+                return {
+                    facilio: parts[0].trim(),
+                    crm: parts[1] ? parts[1].trim() : parts[0].trim()
+                };
+            });
+
+            if (entityPairs.length === 0) {
+                throw new Error("Selected sequence is empty");
+            }
+
+            logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Loaded sequence with ${entityPairs.length} pairs</p>`;
+            
+            // Initialize sequence progress
+            document.getElementById("sequenceProgressBar").style.width = "0%";
+            document.getElementById("sequenceProgressText").textContent = `0/${entityPairs.length}`;
+        } else {
+            const selectedFaciliooEntity = $("#entitySelect").val();
+            const selectedCrmEntity = $("#entitySelectCRM").val();
+            
+            if (!selectedFaciliooEntity || !selectedCrmEntity) {
+                throw new Error("Please select both source and target entities");
+            }
+
+            entityPairs = [{
+                facilio: selectedFaciliooEntity,
+                crm: selectedCrmEntity
+            }];
+        }
+
+        // Track overall metrics
+        let totalRecordsProcessed = 0;
+        let totalErrors = 0;
+        let totalSuccess = 0;
+        let totalUpdates = 0;
+        let totalCreates = 0;
+        let totalDataSize = 0;
+        const startTime = Date.now();
+
+        // Process each entity pair
+        for (const [index, pair] of entityPairs.entries()) {
+            const { facilio, crm } = pair;
+            const pairNumber = isSequenceMigration ? ` (${index + 1}/${entityPairs.length})` : '';
+            const pairStartTime = Date.now();
+
             logsContainer.innerHTML += `
-                <p><i class="fas fa-exclamation-triangle"></i> Error calculating coverage: ${error.message}</p>
-                <p><small>Matched Fields: ${JSON.stringify(matchedFields)}</small></p>
+                <div class="pair-header">
+                    <i class="fas fa-arrow-right"></i> Starting migration${pairNumber}: 
+                    <b>${facilio}</b> → <b>${crm}</b>
+                </div>
             `;
             autoScrollLogs();
+
+            try {
+                // Validate CRM entity
+                if (!crm || crm.toLowerCase() === 'undefined') {
+                    throw new Error(`Invalid CRM entity name: ${crm}`);
+                }
+
+                // Fetch matched fields
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching matched fields...</p>`;
+                autoScrollLogs();
+                
+                const matchedFieldsResponse = await fetch(
+                    `/get-matching-fields?selectedFaciliooEntity=${encodeURIComponent(facilio)}&selectedCrmEntity=${encodeURIComponent(crm)}`, 
+                    {
+                        method: "GET",
+                        headers: {"Authorization": `Bearer ${localStorage.getItem('authToken')}`}
+                    }
+                );
+
+                if (!matchedFieldsResponse.ok) {
+                    throw new Error("Failed to fetch matched fields");
+                }
+
+                const matchedFieldsData = await matchedFieldsResponse.json();
+                const matchedFields = matchedFieldsData.matched_fields || [];
+
+                // Check required fields coverage
+                let coveragePercentage = "100%";
+                try {
+                    const crmFieldsResponse = await fetch(`/crm-entity-fields?entity_name=${encodeURIComponent(crm)}`, {
+                        headers: {
+                            "Authorization": `Bearer ${localStorage.getItem('authToken')}`,
+                            "Content-Type": "application/json",
+                        },
+                    });
+                    
+                    if (crmFieldsResponse.ok) {
+                        const crmFieldsData = await crmFieldsResponse.json();
+                        if (crmFieldsData.success && crmFieldsData.columns) {
+                            const mandatoryFields = crmFieldsData.columns
+                                .filter(col => col?.mandatory && col.name)
+                                .map(col => col.name.toString().toLowerCase().trim());
+                            
+                            const matchedCrmFields = matchedFields
+                                .map(field => {
+                                    const match = /-\s*([^*+]+)/.exec(field);
+                                    return match ? match[1].toLowerCase().trim() : null;
+                                })
+                                .filter(field => field);
+                            
+                            const coveredMandatoryFields = mandatoryFields.filter(mandatoryField => 
+                                matchedCrmFields.includes(mandatoryField)
+                            ).length;
+                            
+                            coveragePercentage = mandatoryFields.length > 0 
+                                ? ((coveredMandatoryFields / mandatoryFields.length) * 100).toFixed(2) + "%"
+                                : "100%";
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error calculating coverage:", error);
+                    logsContainer.innerHTML += `<p><i class="fas fa-exclamation-triangle"></i> Warning: ${error.message}</p>`;
+                }
+
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Required fields coverage: ${coveragePercentage}</p>`;
+                autoScrollLogs();
+
+                // Fetch source entity data
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for <b>${facilio}</b>...</p>`;
+                autoScrollLogs();
+                
+                const entityDataResponse = await fetch(
+                    `/get-entity-data?entity_name=${encodeURIComponent(facilio)}`, 
+                    {
+                        method: "GET",
+                        headers: {"Authorization": `Bearer ${localStorage.getItem('authToken')}`}
+                    }
+                );
+
+                if (!entityDataResponse.ok) {
+                    throw new Error("Failed to fetch entity data");
+                }
+
+                const entityData = await entityDataResponse.json();
+                const totalRecords = entityData.total_records || entityData.data?.length || 0;
+                const estimatedDataSize = totalRecords * 1024; // Approximate 1KB per record
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Found ${totalRecords} records (≈${formatBytes(estimatedDataSize)}) to migrate</p>`;
+                autoScrollLogs();
+
+                // Start migration
+                document.getElementById("migrationMessage").textContent = `Preparing migration${pairNumber}...`;
+                document.getElementById("migrationProgress").style.width = "0%";
+
+                const response = await fetch("/migrate-entity", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({
+                        selected_facilioo_entity: facilio,
+                        selected_crm_entity: crm,
+                        limit_records: limitRecords ? 10 : null
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Migration failed with status ${response.status}`);
+                }
+
+                const data = await response.json();
+                const totalMigratedRecords = data.total_records || 0;
+                const createdCount = data.insert_count || 0;
+                const updatedCount = data.update_count || 0;
+                let processedRecords = 0;
+
+                // Process migration results
+                for (const result of data.results || []) {
+                    processedRecords++;
+                    const progress = (processedRecords / totalMigratedRecords) * 100;
+                    document.getElementById("migrationProgress").style.width = `${progress}%`;
+                    document.getElementById("migrationMessage").textContent = 
+                        `Migrating${pairNumber} record ${processedRecords} of ${totalMigratedRecords}`;
+
+                    logsContainer.innerHTML += `
+                        <div class="record-log">
+                            <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>
+                            <div class="record-details">
+                                <span>ID: ${result.record_id || "N/A"}</span>
+                                <span>Status: ${result.action === 'insert' ? 
+                                    '<span class="text-green-600">Created</span>' : 
+                                    '<span class="text-yellow-600">Updated</span>'}</span>
+                                ${result.error ? `<span class="text-red-600">Error: ${result.error}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                    autoScrollLogs();
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+
+                // Calculate pair metrics
+                const pairDuration = ((Date.now() - pairStartTime) / 1000).toFixed(2);
+                const velocity = totalMigratedRecords > 0 
+                    ? (totalMigratedRecords / pairDuration).toFixed(2)
+                    : "0";
+                const successRate = totalMigratedRecords > 0
+                    ? ((data.success_count || 0) / totalMigratedRecords * 100).toFixed(1)
+                    : "0";
+                const dataQuality = totalMigratedRecords > 0
+                    ? ((totalMigratedRecords - (data.error_count || 0)) / totalMigratedRecords * 100).toFixed(1)
+                    : "100";
+                const dataSize = formatBytes(estimatedDataSize * (totalMigratedRecords / Math.max(totalRecords, 1)));
+
+                // Update metrics
+                totalRecordsProcessed += totalMigratedRecords;
+                totalErrors += data.error_count || 0;
+                totalSuccess += data.success_count || 0;
+                totalUpdates += updatedCount;
+                totalCreates += createdCount;
+                totalDataSize += estimatedDataSize * (totalMigratedRecords / Math.max(totalRecords, 1));
+
+                // Add to completed pairs
+                const completedPair = document.createElement("div");
+                completedPair.className = "completed-pair-item";
+                completedPair.innerHTML = `
+                    <div class="completed-pair-header">
+                        <span class="font-medium">${facilio} → ${crm}</span>
+                        <span class="text-sm">${pairDuration}s</span>
+                    </div>
+                    <div class="completed-pair-metrics grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+                        <div class="metric-item">
+                            <div class="metric-value">${totalMigratedRecords}</div>
+                            <div class="metric-label">Records</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value text-green-600">${createdCount}</div>
+                            <div class="metric-label">Created</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value text-yellow-600">${updatedCount}</div>
+                            <div class="metric-label">Updated</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value ${data.error_count > 0 ? 'text-red-600' : ''}">${data.error_count || 0}</div>
+                            <div class="metric-label">Errors</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value">${velocity}/s</div>
+                            <div class="metric-label">Speed</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value">${dataQuality}%</div>
+                            <div class="metric-label">Data Quality</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value">${dataSize}</div>
+                            <div class="metric-label">Data Size</div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-value">${coveragePercentage}</div>
+                            <div class="metric-label">Req. Fields</div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById("completedPairsContainer").appendChild(completedPair);
+                
+                if (isSequenceMigration) {
+                    // Update sequence progress
+                    const progress = ((index + 1) / entityPairs.length) * 100;
+                    document.getElementById("sequenceProgressBar").style.width = `${progress}%`;
+                    document.getElementById("sequenceProgressText").textContent = `${index + 1}/${entityPairs.length}`;
+                }
+
+                logsContainer.innerHTML += `
+                    <div class="pair-result">
+                        <i class="fas fa-check-circle"></i> Completed${pairNumber} in ${pairDuration}s:
+                        <ul>
+                            <li>Records: ${totalMigratedRecords}</li>
+                            <li>Created: ${createdCount}</li>
+                            <li>Updated: ${updatedCount}</li>
+                            <li>Errors: ${data.error_count || 0}</li>
+                            <li>Speed: ${velocity} records/sec</li>
+                            <li>Data Quality: ${dataQuality}%</li>
+                        </ul>
+                    </div>
+                `;
+                autoScrollLogs();
+
+            } catch (pairError) {
+                logsContainer.innerHTML += `
+                    <div class="pair-error">
+                        <i class="fas fa-times-circle"></i> Failed${pairNumber}:
+                        ${pairError.message}
+                    </div>
+                `;
+                autoScrollLogs();
+                if (!isSequenceMigration) throw pairError;
+                continue;
+            }
         }
-        
-        if (!matchedFields || matchedFields.length === 0) {
-            throw new Error("No matching fields found for the selected entities.");
-        }
 
-        // Log matched fields
-        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved matched fields for migration.</p>`;
-        document.getElementById("fetchingProgress").style.width = "100%";
-        document.getElementById("fetchingMessage").textContent = "Complete";
+        // Final metrics
+        const totalDuration = ((Date.now() - startTime) / 1000).toFixed(2);
+        const velocity = totalRecordsProcessed > 0 
+            ? (totalRecordsProcessed / totalDuration).toFixed(2)
+            : "0";
+        const successRate = totalRecordsProcessed > 0
+            ? ((totalSuccess / totalRecordsProcessed) * 100).toFixed(2)
+            : "0";
+        const dataQuality = totalRecordsProcessed > 0
+            ? ((totalRecordsProcessed - totalErrors) / totalRecordsProcessed * 100).toFixed(1)
+            : "100";
 
-        // Fetch entity data from staging
-        logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Retrieving data for Facilioo entity: <b>${selectedFaciliooEntity}</b> from staging database...</p>`;
-        const entityDataResponse = await fetch(`/get-entity-data?entity_name=${selectedFaciliooEntity}`, {
-            method: "GET",
-            headers: {"Authorization": `Bearer ${accessToken}`}
-        });
-
-        if (!entityDataResponse.ok) {
-            throw new Error("Failed to fetch entity data from staging.");
-        }
-
-        const entityData = await entityDataResponse.json();
-
-        // Check the structure of entityData to find the number of records
-        const totalRecords = entityData.total_records || entityData.data?.length || entityData.length || 0;
-
-        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Retrieved ${totalRecords} records for Facilioo entity: <b>${selectedFaciliooEntity}</b>.</p>`;
-
-        // Start migration
-        document.getElementById("migrationMessage").textContent = "Starting migration...";
-        document.getElementById("migrationProgress").style.width = "0%";
-
-        const startTime = Date.now(); // Record start time for velocity calculation
-
-        const response = await fetch("/migrate-entity", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${accessToken}`
-            },
-            body: JSON.stringify({
-                selected_facilioo_entity: selectedFaciliooEntity,
-                selected_crm_entity: selectedCrmEntity,
-                limit_records: limitRecords ? 10 : null // Send limit parameter if checkbox is checked
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error("Migration failed.");
-        }
-
-        const data = await response.json();
-        const totalMigratedRecords = data.total_records;
-        let processedRecords = 0;
-
-        // Process migration results
-        for (const result of data.results) {
-            processedRecords++;
-            const progress = (processedRecords / totalMigratedRecords) * 100;
-            document.getElementById("migrationProgress").style.width = `${progress}%`;
-            document.getElementById("migrationMessage").textContent = `Migrating record ${result.record_id}...`;
-
-            // Log the current record being processed
-            logsContainer.innerHTML += `
-                <p>
-                    <i class="fas fa-sync-alt"></i> Processing record <b>${processedRecords}</b> of <b>${totalMigratedRecords}</b>...
-                    <br>
-                    <strong>Record ID:</strong> ${result.record_id || "N/A"} <br>
-                    <strong>Staging Status:</strong> ${result.staging_status || "N/A"} <br>
-                    <strong>CRM Status:</strong> ${result.crm_status || "N/A"} <br>
-                    <strong>Action:</strong> ${result.action || "none"} <br>
-                    <strong style="color: red;">Error:</strong> ${result.error ? `<span style="color: red;">${result.error}</span>` : "none"} <br>
-                    <strong style="color: orange;">Failed Fields:</strong> ${Array.isArray(result.failed_fields) && result.failed_fields.length 
-                        ? `<span style="color: orange;">${result.failed_fields.join(", ")}</span>` 
-                        : "none"} <br>
-                </p>
-            `;
-
-            await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
-        }
-
-        // Calculate Velocity
-        const endTime = Date.now();
-        const totalTimeTaken = (endTime - startTime) / 1000; // Convert to seconds
-        const velocity = (totalMigratedRecords / totalTimeTaken).toFixed(2);
-        document.getElementById("migrationVelocity").textContent = `${velocity} records/sec`;
-
-        // Calculate Data Quality
-        const dataQuality = ((totalMigratedRecords - data.error_count) / totalMigratedRecords * 100).toFixed(2);
-        document.getElementById("dataQuality").textContent = `${dataQuality}%`;
-
-        // Update Errors
-        document.getElementById("totalErrors").textContent = data.error_count;
-        document.getElementById("failedFields").textContent = data.failed_fields?.length || 0;
-
-        // Update Processed Records Tile
-        document.getElementById("totalProcessedRecords").textContent = totalMigratedRecords;
-        document.getElementById("updatedRecords").textContent = data.update_count;
-        document.getElementById("createdRecords").textContent = data.insert_count;
-        const successRate = ((data.success_count / totalMigratedRecords) * 100).toFixed(2);
-        const failureRate = ((data.error_count / totalMigratedRecords) * 100).toFixed(2);
-        document.getElementById("successRate").textContent = `${successRate}%`;
-        document.getElementById("failureRate").textContent = `${failureRate}%`;
-
-        const totalDuration = (endTime - startTime) / 1000; // seconds
-        const avgTimePerRecord = ((endTime - startTime) / totalMigratedRecords).toFixed(2); // ms
-    
-        document.getElementById("totalDuration").textContent = `${totalDuration}s`;
-        document.getElementById("avgTimePerRecord").textContent = `${avgTimePerRecord}ms`;
+        // Show sequence summary if applicable
+        if (isSequenceMigration) {
+            sequenceSummary.classList.remove("hidden");
+            document.getElementById("totalSequenceDuration").textContent = `${totalDuration}s`;
+            document.getElementById("totalSequenceRecords").textContent = totalRecordsProcessed;
             
-        // In your frontend processing loop
-        // After getting matchedFields from /get-matching-fields
-        const fieldsPerRecord = matchedFields.length;
-
-        // During results processing
-        let totalFailedFields = 0;
-        data.results.forEach(result => {
-            totalFailedFields += result.failed_fields?.length || 0;
-        });
-
-        const totalFieldMappings = fieldsPerRecord * data.total_records;
-        const fieldSuccessRate = totalFieldMappings > 0 
-            ? (((totalFieldMappings - totalFailedFields) / totalFieldMappings) * 100).toFixed(2)
-            : "0%";
-
-        // Update the dashboard
-        document.getElementById("fieldsPerRecord").textContent = fieldsPerRecord;
-        document.getElementById("fieldSuccessRate").textContent = `${fieldSuccessRate}%`;
-        document.getElementById("failedFieldsPerRecord").textContent = 
-            (totalFailedFields / data.total_records).toFixed(2);
-        // Approximate data size (very rough estimate)
-        const avgRecordSize = 1024; // 1KB per record
-        const dataSizeMB = ((totalMigratedRecords * avgRecordSize) / (1024 * 1024)).toFixed(2);
-        const recordsPerHour = ((totalMigratedRecords / totalDuration) * 3600).toFixed(0);
-        document.getElementById("dataSize").textContent = `${dataSizeMB} MB`;
-        document.getElementById("recordsPerHour").textContent = recordsPerHour;
-        // Log migration summary
-        logsContainer.innerHTML += `
-            <p><i class="fas fa-info-circle"></i> Migration Summary:</p>
-            <p>Total Records: ${totalMigratedRecords}</p>
-            <p>Successfully Migrated: ${data.success_count}</p>
-            <p>Updated: ${data.update_count}</p>
-            <p>Inserted: ${data.insert_count}</p>
-            <p>Failed: ${data.error_count}</p>
-        `;
-
-        // Handle Excel download link
-        if (data.excel_file_url) {
-            const excelLink = document.getElementById("excelLink");
-            excelLink.href = data.excel_file_url;
-            document.getElementById("excelDownload").style.display = "block";
-        }
-
-        // Show the metrics section
-        document.getElementById("metricsSection").style.display = "block";
-
-        // Update migration status message
-        if (data.error_count === 0) {
-            document.getElementById("migrationMessage").textContent = "Complete";
+            logsContainer.innerHTML += `
+                <div class="sequence-summary">
+                    <i class="fas fa-flag-checkered"></i> Sequence <b>${sequenceName}</b> completed in ${totalDuration}s
+                    <ul>
+                        <li>Total records: ${totalRecordsProcessed}</li>
+                        <li>Created: ${totalCreates}</li>
+                        <li>Updated: ${totalUpdates}</li>
+                        <li>Data Quality: ${dataQuality}%</li>
+                        <li>Total Data Size: ${formatBytes(totalDataSize)}</li>
+                        <li>Average Speed: ${velocity} records/sec</li>
+                    </ul>
+                </div>
+            `;
         } else {
-            document.getElementById("migrationMessage").textContent = "Partial Success";
+            logsContainer.innerHTML += `
+                <div class="migration-summary">
+                    <i class="fas fa-flag-checkered"></i> Migration completed in ${totalDuration}s
+                    <ul>
+                        <li>Records processed: ${totalRecordsProcessed}</li>
+                        <li>Created: ${totalCreates}</li>
+                        <li>Updated: ${totalUpdates}</li>
+                        <li>Data Quality: ${dataQuality}%</li>
+                        <li>Total Data Size: ${formatBytes(totalDataSize)}</li>
+                        <li>Average Speed: ${velocity} records/sec</li>
+                    </ul>
+                </div>
+            `;
         }
+        autoScrollLogs();
 
+        // Show metrics section
+        metricsSection.style.display = "block";
+        document.getElementById("migrationMessage").textContent = "Complete";
         setTimeout(resetProgressBars, 1000);
-        document.getElementById("progressContainer").style.display = "none";
 
     } catch (error) {
-        console.error("Error:", error);
-        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred during migration: ${error.message}</p>`;
-        document.getElementById("fetchingMessage").textContent = "Fetching: Error";
-        document.getElementById("migrationMessage").textContent = "Migration: Error";
+        console.error("Migration error:", error);
+        logsContainer.innerHTML += `
+            <div class="error-summary">
+                <i class="fas fa-times-circle"></i> Migration failed:
+                ${error.message}
+            </div>
+        `;
+        autoScrollLogs();
+        document.getElementById("migrationMessage").textContent = "Error";
     } finally {
+        document.getElementById("progressContainer").style.display = "none";
         hideLoadingSpinner();
     }
-});        
-        function autoScrollLogs() {
+});
+
+// Helper function to format bytes
+function formatBytes(bytes, decimals = 2) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+function autoScrollLogs() {
             const logsContainer = document.getElementById("logsContainer");
             logsContainer.scrollTop = logsContainer.scrollHeight; // Scroll to the bottom
         }
 
+
+
+
+
+        
 
         document.getElementById("authenticateBtn").addEventListener("click", async () => {
             const email = document.getElementById("email").value;
@@ -1127,7 +1353,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 const data = await response.json();
                 accessToken = data.access_token; // Store token globally
                 document.getElementById("authForm").style.display = "none";
-                document.getElementById("migrationSection").style.display = "none";
+                document.getElementById("migrationSection").style.display = "block";
                 document.getElementById("matchControls").style.display = "block";
                 document.getElementById("progressContainer").style.display = "block";
                 document.getElementById("logsSection").style.display = "block";
@@ -1593,6 +1819,312 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
         function hideLoadingSpinner() {
             $("#loadingSpinner").hide();
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            let draggedItem = null;
+        
+            // Initialize drag and drop containers
+            const initDragDrop = (container) => {
+                container.addEventListener('dragstart', (e) => {
+                    if (e.target.classList.contains('drag-item')) {
+                        draggedItem = e.target;
+                        e.target.style.opacity = '0.5';
+                        e.dataTransfer.setData('text/plain', e.target.textContent);
+                    }
+                });
+        
+                container.addEventListener('dragend', (e) => {
+                    if (e.target.classList.contains('drag-item')) {
+                        e.target.style.opacity = '1';
+                        draggedItem = null;
+                    }
+                });
+        
+                container.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    const afterElement = getDragAfterElement(container, e.clientY);
+                    const draggable = draggedItem;
+                    
+                    if (afterElement == null) {
+                        container.appendChild(draggable);
+                    } else {
+                        container.insertBefore(draggable, afterElement);
+                    }
+                });
+            };
+        
+            function loadSavedSequences() {
+                return fetch('/get-migration-sequences/', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('authToken')
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(sequences => {
+                    const select = document.getElementById('selectedSequence');
+                    const currentValue = select.value; // Remember current selection
+                    
+                    // Clear existing options
+                    select.innerHTML = '<option value="">-- Select a sequence --</option>';
+                    
+                    // Add new options
+                    sequences.forEach(seq => {
+                        const option = new Option(seq.order_name, seq.order_name);
+                        select.add(option);
+                    });
+                    
+                    // Restore selection if it still exists
+                    if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+                        select.value = currentValue;
+                    }
+                    
+                    return sequences; // Return the sequences for chaining
+                })
+                .catch(error => {
+                    console.error('Error loading sequences:', error);
+                    alert('Error loading sequences: ' + error.message);
+                    throw error; // Re-throw for chaining
+                });
+            }
+                    
+            // Helper function to determine drop position
+            const getDragAfterElement = (container, y) => {
+                const draggableElements = [...container.querySelectorAll('.drag-item:not(.dragging)')];
+                
+                return draggableElements.reduce((closest, child) => {
+                    const box = child.getBoundingClientRect();
+                    const offset = y - box.top - box.height / 2;
+                    
+                    if (offset < 0 && offset > closest.offset) {
+                        return { offset: offset, element: child };
+                    } else {
+                        return closest;
+                    }
+                }, { offset: Number.NEGATIVE_INFINITY }).element;
+            };
+        
+            // Create a draggable item
+            const createDraggableItem = (text) => {
+                const div = document.createElement('div');
+                div.className = 'drag-item bg-gray-50 p-2 mb-1 rounded cursor-move border hover:bg-gray-100';
+                div.draggable = true;
+                div.textContent = text;
+                return div;
+            };
+        
+            // Load available entity pairs from matching_table
+            fetch('/get-matching-entities/', {
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('authToken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('availableEntities');
+                data.forEach(entity => {
+                    container.appendChild(createDraggableItem(entity));
+                });
+            })
+            .catch(error => console.error('Error loading entities:', error));
+        
+            // Initialize drag and drop for both containers
+            initDragDrop(document.getElementById('availableEntities'));
+            initDragDrop(document.getElementById('currentSequence'));
+        
+            // Button event handlers
+            document.getElementById('saveSequenceBtn').addEventListener('click', saveSequence);
+            document.getElementById('deleteSequenceBtn').addEventListener('click', deleteSelectedSequence);
+            
+            // Fixed dropdown change handler
+            document.getElementById('selectedSequence').addEventListener('change', function() {
+                const sequenceName = this.value;
+                const deleteBtn = document.getElementById('deleteSequenceBtn');
+                const hasSelection = sequenceName !== '';
+                
+                deleteBtn.disabled = !hasSelection;
+        
+                // Load the sequence when selected
+                if (hasSelection) {
+                    loadSequenceIntoEditor(sequenceName);
+                } else {
+                    // Clear the editor if no sequence is selected
+                    document.getElementById('sequenceName').value = '';
+                    document.getElementById('currentSequence').innerHTML = '';
+                }
+            });
+        
+            // Load saved sequences on page load
+            loadSavedSequences();
+        
+            function saveSequence() {
+                const nameInput = document.getElementById('sequenceName');
+                const name = nameInput.value.trim();
+                const entities = Array.from(document.getElementById('currentSequence').children)
+                    .map(item => item.textContent.trim())
+                    .filter(item => item); // Remove empty items
+            
+                console.debug("Saving sequence:", {name, entities});
+            
+                // Validation
+                if (!name) {
+                    alert('Sequence name cannot be empty');
+                    nameInput.focus();
+                    return;
+                }
+                
+                if (entities.length === 0) {
+                    alert('Please add at least one entity to the sequence');
+                    return;
+                }
+            
+                const saveBtn = document.getElementById('saveSequenceBtn');
+                const originalText = saveBtn.innerHTML;
+                
+                // Set loading state
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                saveBtn.disabled = true;
+            
+                fetch('/create-migration-sequence/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({
+                        order_name: name,
+                        entity_names: entities
+                    })
+                })
+                .then(async response => {
+                    const data = await response.json();
+                    if (!response.ok) {
+                        console.error("Save failed:", data);
+                        throw new Error(data.detail || `Save failed with status ${response.status}`);
+                    }
+                    return data;
+                })
+                .then(data => {
+                    console.log("Save successful:", data);
+                    // Refresh the sequence list
+                    return loadSavedSequences().then(() => {
+                        // Re-select the current sequence
+                        const select = document.getElementById('selectedSequence');
+                        select.value = name;
+                        select.dispatchEvent(new Event('change'));
+                        alert(data.message || 'Sequence saved successfully');
+                    });
+                })
+                .catch(error => {
+                    console.error("Save error:", error);
+                    alert(`Error: ${error.message}`);
+                })
+                .finally(() => {
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                });
+            }
+            
+            
+            
+            function loadSequenceIntoEditor(sequenceName) {
+                console.log("Loading sequence:", sequenceName);
+                fetch('/get-migration-sequences/', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('authToken')
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to load sequences');
+                    }
+                    return response.json();
+                })
+                .then(sequences => {
+                    const sequence = sequences.find(s => s.order_name === sequenceName);
+                    if (sequence) {
+                        console.log("Found sequence:", sequence);
+                        document.getElementById('sequenceName').value = sequence.order_name;
+                        
+                        const currentSequence = document.getElementById('currentSequence');
+                        currentSequence.innerHTML = '';
+                        
+                        sequence.entity_names.forEach(entity => {
+                            currentSequence.appendChild(createDraggableItem(entity));
+                        });
+                    } else {
+                        console.error("Sequence not found:", sequenceName);
+                        alert("Sequence not found!");
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading sequence:', error);
+                    alert('Error loading sequence details: ' + error.message);
+                });
+            }
+            
+            async function deleteSelectedSequence() {
+                const sequenceName = document.getElementById('selectedSequence').value;
+                if (!sequenceName) {
+                    alert('Please select a sequence to delete');
+                    return;
+                }
+                
+                if (!confirm(`Are you sure you want to delete the sequence "${sequenceName}"?`)) {
+                    return;
+                }
+                
+                const deleteBtn = document.getElementById('deleteSequenceBtn');
+                const originalBtnText = deleteBtn.innerHTML;
+                
+                try {
+                    // Show loading state
+                    deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+                    deleteBtn.disabled = true;
+                    
+                    const response = await fetch('/delete-migration-sequence/', {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + localStorage.getItem('authToken')
+                        },
+                        body: JSON.stringify({ order_name: sequenceName })
+                    });
+            
+                    // First check if response is OK
+                    if (!response.ok) {
+                        // Try to parse error response
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.detail || errorData.message || `Failed to delete sequence (status ${response.status})`);
+                    }
+            
+                    // If OK, parse success response
+                    const result = await response.json();
+                    
+                    // Clear form
+                    document.getElementById('selectedSequence').value = '';
+                    document.getElementById('sequenceName').value = '';
+                    document.getElementById('currentSequence').innerHTML = '';
+                    
+                    // Refresh dropdown
+                    await loadSavedSequences();
+                    
+                    alert(result.message || 'Sequence deleted successfully');
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    alert('Error deleting sequence: ' + error.message);
+                } finally {
+                    // Restore button state
+                    deleteBtn.innerHTML = originalBtnText;
+                    deleteBtn.disabled = true;
+                }
+            }
+        });
+
 
     </script>
 </body>

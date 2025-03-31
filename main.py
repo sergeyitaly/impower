@@ -2065,6 +2065,188 @@ async def get_migration_logs():
             connection.close()
 
 
+class MigrationSequence(BaseModel):
+    order_name: str
+    entity_names: List[str]
+
+@app.post("/create-migration-sequence/")
+async def create_or_update_migration_sequence(sequence: MigrationSequence, authorization: str = Header(None)):
+    db = SessionLocal()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        # Debug logging
+        print(f"Processing sequence: {sequence.order_name}")
+        
+        # Create table if not exists
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS migration_sequences (
+                order_name TEXT PRIMARY KEY,
+                entity_names JSONB NOT NULL
+            )
+        """))
+        db.commit()
+
+        # Convert to JSON and trim whitespace
+        entity_names_json = json.dumps([e.strip() for e in sequence.entity_names])
+        sequence_name = sequence.order_name.strip()
+
+        # Alternative UPSERT implementation that works across databases
+        try:
+            # First try to insert
+            db.execute(
+                text("""
+                    INSERT INTO migration_sequences (order_name, entity_names)
+                    VALUES (:order_name, :entity_names)
+                """),
+                {
+                    "order_name": sequence_name,
+                    "entity_names": entity_names_json
+                }
+            )
+            message = "Sequence created successfully"
+        except Exception as insert_error:
+            # If insert fails, update instead
+            db.rollback()
+            result = db.execute(
+                text("""
+                    UPDATE migration_sequences 
+                    SET entity_names = :entity_names
+                    WHERE order_name = :order_name
+                """),
+                {
+                    "order_name": sequence_name,
+                    "entity_names": entity_names_json
+                }
+            )
+            if result.rowcount == 0:
+                raise HTTPException(status_code=400, detail="Sequence not found for update")
+            message = "Sequence updated successfully"
+
+        db.commit()
+        return {"success": True, "message": message}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Database error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/get-migration-sequences/")
+async def get_migration_sequences(authorization: str = Header(None)):
+    db = SessionLocal()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        # Create table if not exists (in case this is first call)
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS migration_sequences (
+                order_name TEXT PRIMARY KEY,
+                entity_names JSONB
+            )
+        """))
+        db.commit()
+
+        # Get all sequences
+        result = db.execute(
+            text("SELECT order_name, entity_names FROM migration_sequences")
+        ).fetchall()
+
+        return [{"order_name": row[0], "entity_names": row[1]} for row in result]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/get-matching-entities/")
+async def get_matching_entities(authorization: str = Header(None)):
+    db = SessionLocal()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        result = db.execute(
+            text("SELECT entity_pair FROM matching_table")
+        ).fetchall()
+
+        return [row[0] for row in result]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+class DeleteSequenceRequest(BaseModel):
+    order_name: str
+
+@app.delete("/delete-migration-sequence/")
+async def delete_migration_sequence(
+    request: DeleteSequenceRequest,  # Changed from MigrationSequence to DeleteSequenceRequest
+    authorization: str = Header(None)
+):
+    db = SessionLocal()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        # Verify sequence exists
+        existing = db.execute(
+            text("SELECT 1 FROM migration_sequences WHERE order_name = :order_name"),
+            {"order_name": request.order_name.strip()}
+        ).fetchone()
+
+        if not existing:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+
+        # Delete the sequence
+        result = db.execute(
+            text("DELETE FROM migration_sequences WHERE order_name = :order_name"),
+            {"order_name": request.order_name.strip()}
+        )
+        
+        db.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+            
+        return {"success": True, "message": "Sequence deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.get("/get-migration-sequences/{sequence_name}")
+async def get_migration_sequence(sequence_name: str, authorization: str = Header(None)):
+    db = SessionLocal()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    try:
+        result = db.execute(
+            text("SELECT order_name, entity_names FROM migration_sequences WHERE order_name = :order_name"),
+            {"order_name": sequence_name}
+        ).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Sequence not found")
+
+        return {"order_name": result[0], "entity_names": result[1]}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 # FastAPI route to serve the index.html page
 @app.get("/", response_class=HTMLResponse)
