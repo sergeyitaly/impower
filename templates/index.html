@@ -1158,14 +1158,50 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 totalUpdates += updatedCount;
                 totalCreates += createdCount;
                 totalDataSize += estimatedDataSize * (totalMigratedRecords / Math.max(totalRecords, 1));
-
                 // Add to completed pairs
                 const completedPair = document.createElement("div");
                 completedPair.className = "completed-pair-item";
+                let crmEntityLink = null;
+                try {
+                    const crmLinkResponse = await fetch(`/crm-entity-link?entity_name=${encodeURIComponent(crm)}`, {
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                        }
+                    });
+                    
+                    if (crmLinkResponse.ok) {
+                        const crmLinkData = await crmLinkResponse.json();
+                        crmEntityLink = crmLinkData.crm_entity_link;
+                    } else {
+                        console.error(`Failed to get CRM link for ${crm}:`, crmLinkResponse.status);
+                    }
+                } catch (error) {
+                    console.error(`Error fetching CRM link for ${crm}:`, error);
+                }
                 completedPair.innerHTML = `
                     <div class="completed-pair-header">
-                        <span class="font-medium">${facilio} → ${crm}</span>
-                        <span class="text-sm">${pairDuration}s</span>
+                        <div class="flex items-center justify-between w-full">
+                            <span class="font-medium">${facilio} → ${crm}</span>
+                            <div class="flex items-center space-x-3">
+                                <span class="text-sm">${pairDuration}s</span>
+                                <div class="flex space-x-2">
+                                    ${data.excel_file_url ? `
+                                    <a href="${data.excel_file_url}" 
+                                       class="excel-download-btn text-xs bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded flex items-center transition-colors"
+                                       download="${facilio}_to_${crm}_migration.xlsx">
+                                        <i class="fas fa-file-excel mr-1"></i> Excel
+                                    </a>
+                                    ` : ''}
+                                    ${crmEntityLink ? `
+                                    <a href="${crmEntityLink}" 
+                                    target="_blank"
+                                    class="crm-view-btn text-xs bg-blue-100 hover:bg-blue-200 text-blue-800 px-2 py-1 rounded flex items-center transition-colors">
+                                        <i class="fas fa-external-link-alt mr-1"></i> View in CRM
+                                    </a>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="completed-pair-metrics grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
                         <div class="metric-item">
@@ -1202,8 +1238,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                         </div>
                     </div>
                 `;
-                document.getElementById("completedPairsContainer").appendChild(completedPair);
-                
+                document.getElementById("completedPairsContainer").appendChild(completedPair);                
                 if (isSequenceMigration) {
                     // Update sequence progress
                     const progress = ((index + 1) / entityPairs.length) * 100;

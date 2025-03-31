@@ -863,3 +863,22 @@ input:focus {
 #migrateEntityBtn.active:hover {
     background-color: #2563eb;
 }
+
+.excel-download-btn {
+    transition: all 0.2s ease;
+    border: 1px solid #d1fae5;
+}
+.excel-download-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    background-color: #d1fae5 !important;
+}
+.crm-view-btn {
+    transition: all 0.2s ease;
+    border: 1px solid #dbeafe;
+}
+.crm-view-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    background-color: #dbeafe !important;
+}
