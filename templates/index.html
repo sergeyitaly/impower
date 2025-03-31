@@ -124,7 +124,7 @@
                 
                 <!-- Sequence Setup Card -->
                 <div class="bg-white p-4 rounded-lg shadow-sm mb-6">
-                    <h4 class="text-md font-medium mb-3 text-gray-700">Migration Order</h4>
+                    <h4 class="text-md font-medium mb-3 text-gray-700">Migration Sequence</h4>
                     <div class="space-y-4">
                         <div>
                             <input type="text" id="sequenceName" 
@@ -150,14 +150,18 @@
                         
                         <div class="flex justify-center space-x-3 pt-2">
                             <button id="saveSequenceBtn" 
-                                    class="bg-green-500 hover:bg-green-600 text-white px-5 py-2 rounded-lg transition flex items-center">
+                                    class="bg-gray-300 text-gray-500 px-5 py-2 rounded-lg flex items-center transition-colors" 
+                                    disabled>
                                 <i class="fas fa-save mr-2"></i> Save
                             </button>
                             <button id="deleteSequenceBtn" 
-                                    class="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-lg transition flex items-center" disabled>
+                                    class="bg-gray-300 text-gray-500 px-5 py-2 rounded-lg flex items-center transition-colors" 
+                                    disabled>
                                 <i class="fas fa-trash mr-2"></i> Delete
                             </button>
                         </div>
+                        
+                        
                     </div>
                 </div>
             </div>
@@ -207,23 +211,41 @@
                         </div>
                         
                     </div>
-                                <!-- Sequence Help Card -->
-            <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                <h4 class="text-md font-medium mb-2 text-blue-800 flex items-center">
-                    <i class="fas fa-info-circle mr-2 text-blue-500"></i>
-                    How to Create a Migration Sequence
-                </h4>
-                <ol class="list-decimal list-inside text-sm text-gray-700 space-y-1.5 pl-1">
-                    <li>Name your sequence </li>
-                    <li>Drag entity pairs from the Available Entitiy Pairs to the Migration Sequence Order</li>
-                    <li>Arrange them in the order they should be processed</li>
-                    <li>Click "Save" when finished</li>
-                    <li>Select this sequence when running migrations</li>
-                </ol>
-                <div class="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
-                    <i class="fas fa-lightbulb mr-1"></i> <strong>Tip:</strong> Start with reference data (like locations) before transactional data (like work orders)
-                </div>
-            </div>
+                    <!-- Compact Sequence Help Card -->
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-random text-blue-500 mt-1"></i>
+                            <div>
+                                <h4 class="font-medium text-blue-800 mb-2">Quick Migration Guide</h4>
+                                <ol class="space-y-2 text-sm">
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-blue-600 font-medium">1.</span>
+                                        <span>Name your sequence (e.g. <span class="font-mono bg-blue-100 px-1.5 rounded">Monthly_Sync</span>)</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-blue-600 font-medium">2.</span>
+                                        <span>Drag entity pairs from <span class="text-blue-600">Available Entitiy Pairs</span> to <span class="text-blue-600">Migration Sequence Order</span></span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-blue-600 font-medium">3.</span>
+                                        <span>Arrange by priority (top first)</span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-blue-600 font-medium">4.</span>
+                                        <span>Click <span class="inline-flex items-center px-1.5 bg-green-100 text-green-800 rounded text-xs"><i class="fas fa-save mr-1"></i>Save</span></span>
+                                    </li>
+                                    <li class="flex items-start gap-2">
+                                        <span class="text-blue-600 font-medium">5.</span>
+                                        <span>Select from dropdown to run Migration</span>
+                                    </li>
+                                </ol>
+                                <div class="mt-2 text-xs text-blue-700 flex items-start gap-1.5">
+                                    <i class="fas fa-lightbulb mt-0.5"></i>
+                                    <span><strong>Tip:</strong> Reference data first (locations → work orders)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
                     <!-- Progress Visualization -->
                     <div id="progressContainer" class="bg-white p-4 rounded-lg shadow-sm" style="display: none;">
@@ -2160,6 +2182,103 @@ function autoScrollLogs() {
             }
         });
 
+let hasChanges = false;
+const saveBtn = document.getElementById('saveSequenceBtn');
+const deleteBtn = document.getElementById('deleteSequenceBtn');
+const sequenceContainer = document.getElementById('currentSequence');
+const sequenceDropdown = document.getElementById('sequenceDropdown'); // Assuming dropdown ID
+
+// Initialize buttons as disabled
+updateButtonStates();
+
+// MutationObserver to detect changes in the sequence
+const observer = new MutationObserver(() => {
+  if (!hasChanges) {
+    hasChanges = true;
+    updateButtonStates();
+  }
+});
+
+observer.observe(sequenceContainer, {
+  childList: true,
+  subtree: true,
+  attributes: false,
+  characterData: false
+});
+
+// Track drag-and-drop operations
+let draggedItem = null;
+
+sequenceContainer.addEventListener('dragstart', (e) => {
+  draggedItem = e.target;
+});
+
+sequenceContainer.addEventListener('dragover', (e) => {
+  e.preventDefault(); // Allow drop
+});
+
+sequenceContainer.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (draggedItem && e.target !== draggedItem) {
+    const rect = e.target.getBoundingClientRect();
+    const dropPosition = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+    
+    if (dropPosition === 'before') {
+      e.target.before(draggedItem);
+    } else {
+      e.target.after(draggedItem);
+    }
+    
+    hasChanges = true;
+    updateButtonStates();
+  }
+});
+
+// Track manual additions/removals
+document.getElementById('availableEntities').addEventListener('dragend', () => {
+  if (sequenceContainer.children.length > 0) {
+    hasChanges = true;
+    updateButtonStates();
+  }
+});
+
+// Prevent dropdown selection from enabling buttons
+sequenceDropdown.addEventListener('change', () => {
+  hasChanges = false; // Reset changes since no drag-and-drop occurred
+  updateButtonStates();
+});
+
+// Button state updater
+function updateButtonStates() {
+  if (hasChanges) {
+    saveBtn.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+    saveBtn.classList.add('bg-green-500', 'hover:bg-green-600', 'text-white', 'cursor-pointer');
+    saveBtn.disabled = false;
+    
+    deleteBtn.classList.remove('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+    deleteBtn.classList.add('bg-red-500', 'hover:bg-red-600', 'text-white', 'cursor-pointer');
+    deleteBtn.disabled = false;
+  } else {
+    saveBtn.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+    saveBtn.classList.remove('bg-green-500', 'hover:bg-green-600', 'text-white', 'cursor-pointer');
+    saveBtn.disabled = true;
+    
+    deleteBtn.classList.add('bg-gray-300', 'text-gray-500', 'cursor-not-allowed');
+    deleteBtn.classList.remove('bg-red-500', 'hover:bg-red-600', 'text-white', 'cursor-pointer');
+    deleteBtn.disabled = true;
+  }
+}
+
+// Reset changes after operations
+saveBtn.addEventListener('click', () => {
+  hasChanges = false;
+  updateButtonStates();
+});
+
+deleteBtn.addEventListener('click', () => {
+  hasChanges = false;
+  updateButtonStates();
+});
 
     </script>
 </body>
