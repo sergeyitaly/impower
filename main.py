@@ -1,6 +1,5 @@
 import psycopg2
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header, Depends, Query
-from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import requests
@@ -31,24 +30,23 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Generator
 import pandas as pd
+from fastapi.responses import PlainTextResponse, JSONResponse, HTMLResponse
+import xml.etree.ElementTree as ET
+from sqlalchemy import insert
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
-
-# Fetch environment variables for PostgreSQL and Facil.io API
 USER = os.getenv("USER")
 PASSWORD = os.getenv("PASSWORD")
 HOST = os.getenv("HOST")
 PORT = os.getenv("PORT")
 DBNAME = os.getenv("DBNAME")
 API_URL = os.getenv("API_URL")
+API_KEY = os.getenv("API_KEY")
 APP_ID = os.getenv("APP_ID")
 CRM_MAIN_URL = os.getenv("CRM_MAIN_URL")
-
-#FACILIO_EMAIL = os.getenv("FACILIO_EMAIL")
-#FACILIO_PASSWORD = os.getenv("FACILIO_PASSWORD")
 
 # CRM API Configuration
 CRM_URL = os.getenv("CRM_URL")
@@ -56,6 +54,8 @@ TENANT_ID = os.getenv("TENANT_ID")
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 RESOURCE = os.getenv("RESOURCE")
+
+MAX_PAGE_SIZE = 100
 
 # FastAPI App Setup
 app = FastAPI()
@@ -65,6 +65,20 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+
+class PageInfo(BaseModel):
+    current_page: int
+    page_size: int
+    total_pages: int
+    total_elements: int
+
+class EntityResponse(BaseModel):
+    success: bool
+    message: str
+    data: Dict
+    page_info: PageInfo
 
 # Configure Jinja2 template engine
 templates = Jinja2Templates(directory="templates")
@@ -95,61 +109,54 @@ class DataResponse(BaseModel):
 
 
 
-FACILIOO_ENTITIES = [
-    "accounts", "account-contact-details", "account-groups", "account-permissions",
-    "smart-lock-activity-attempts", "attendances", "attributes", "attribute-groups", "attribute-group-types",
-    "attribute-values", "auths", "bank-accounts", "property-billing-addresses", "bookingaccountitems",
-    "bookingaccounts", "chat-gpt-settings", "colors", "conferences", "conference-document-settings",
-    "conference-document-templates", "conference-settings", "consumption-brands", "consumption-meters",
-    "consumption-readings", "consumption-reading-dates", "consumption-reading-extended",
-    "consumption-types", "contactdetails", "contacttypes", "customer-apps", "customer-app-custom-contents",
-    "documents", "document-groups", "document-shares", "entrances", "erp-imports",
-    "faqs", "faq-groups", "faq-group-visuals", "files", "file-types", "generic-party-settings",
-    "health", "inquiries", "inquiry-categories", "inquiry-sources", "mandates", "nearby-places-categories",
-    "notices", "pantaeniuses", "parties", "predefined-votes", "processes", "process-feeds", "process-feed-types",
-    "process-insurance-claims", "process-notifications", "process-types", "properties", "property-emergency-contacts",
-    "property-management-companies", "property-managers", "property-roles", "property-role-defaults",
-    "resolutions", "resolution-options", "resolution-option-templates", "resolution-templates",
-    "signees", "smart-locks", "smart-lock-types", "sum-votes", "tenants", "terms", "topics", "topic-notes",
-    "topic-templates", "topic-template-resolution-templates", "trades", "units", "unit-contracts",
-    "unit-contract-types", "unit-types", "user-tasks", "user-task-collections", "user-task-notifications",
-    "user-task-priorities", "conference-votes", "voting-end-reasons", "voting-groups", "voting-group-votes",
-    "voting-majorities", "voting-procedures", "voting-sessions", "webhooks", "webhook-attempts",
-    "webhook-events", "webhook-registrations", "work-orders", "work-order-appointment-requests",
-    "work-order-appointment-request-dates", "work-order-feed-entries", "work-order-statuses", "work-order-types"
+IMPOWER_ENTITIES = [
+    "connections",
+    "contacts",
+    "contracts",
+    "documents",
+    "document-tags",
+    "error-codes",
+    "heating-center-units",
+    "heating-centers",
+    "heating-cost-reports",
+    "invoices",
+    "invoice-items",
+    "posting-items",
+    "profit-and-loss-reports",
+    "properties",
+    "units"
 ]
 
 
-def get_facilioo_entities(access_token: str):
+def get_impower_entities(access_token: str):
     try:
-        # Define the Facilioo API endpoint to fetch entities
-        query_url = f"{API_URL}/api/entities"  # Adjust the endpoint as per your Facilioo API
+        # Define the impower API endpoint to fetch entities
+        query_url = f"{API_URL}/entities"  # Adjust the endpoint as per your impower API
         response = requests.get(query_url, headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
+            "Authorization": f"Bearer {access_token}"
         })
 
         if response.status_code != 200:
-            raise Exception(f"Failed to fetch Facilioo entities: {response.text}")
+            raise Exception(f"Failed to fetch impower entities: {response.text}")
 
         # Parse the response to extract entity names
-        entities_data = response.json().get("value", [])  # Adjust based on the Facilioo API response structure
+        entities_data = response.json().get("value", [])  # Adjust based on the impower API response structure
         entities = [entity["name"].lower().replace(" ", "-") for entity in entities_data]  # Format entity names
 
-        # Update the global FACILIOO_ENTITIES array
-        global FACILIOO_ENTITIES
-        FACILIOO_ENTITIES = entities
+        # Update the global IMPOWER_ENTITIES array
+        global IMPOWER_ENTITIES
+        IMPOWER_ENTITIES = entities
 
         return entities
     except Exception as e:
-        logging.error(f"Error fetching Facilioo entities: {str(e)}")
+        logging.error(f"Error fetching impower entities: {str(e)}")
         raise
 
-@app.get("/facilioo-entities")
-async def get_facilioo_entities():
-    return FACILIOO_ENTITIES
+@app.get("/impower-entities")
+async def get_impower_entities():
+    return IMPOWER_ENTITIES
 
-class FaciliooEntitiesRequest(BaseModel):
+class impowerEntitiesRequest(BaseModel):
     access_token: str
 
 
@@ -172,30 +179,33 @@ def convert_to_boolean(value):
     return False  # Default fallback
 
 def infer_schema_from_record(record: dict) -> list:
-    columns = [Column("id", Integer, primary_key=True)]
+    """Infer SQLAlchemy schema from record dictionary with nullable columns."""
+    print(f"Using Column class from: {Column.__module__}")  # Should print sqlalchemy.sql.schema
+
+    columns = [Column("id", Integer, primary_key=True, nullable=False)]
+
     for key, value in record.items():
         if key == "id":
             continue
+
         column_name = key.lower()
-        if value is None:
-            logger.warning(f"Column {column_name} has a None value. Defaulting to String.")
-            columns.append(Column(column_name, String))
-            continue
-        if is_boolean_like(value):
-            columns.append(Column(column_name, Boolean))
-        elif isinstance(value, str):
-            columns.append(Column(column_name, String))
-        elif isinstance(value, int):
-            columns.append(Column(column_name, Integer))
-        elif isinstance(value, float):
-            columns.append(Column(column_name, Float))
-        elif isinstance(value, (dict, list)):
-            columns.append(Column(column_name, JSON))
-        elif isinstance(value, datetime):
-            columns.append(Column(column_name, DateTime))
-        else:
-            logger.warning(f"Unknown type for column {column_name}: {type(value)}. Defaulting to String.")
-            columns.append(Column(column_name, String))
+        if column_name in RESERVED_KEYWORDS:
+            column_name = f"{column_name}_field"
+
+        py_type = type(value)
+
+        type_map = {
+            bool: Boolean,
+            str: String,
+            int: Integer,
+            float: Float,
+            dict: JSON,
+            list: JSON,
+            datetime: DateTime
+        }
+
+        col_type = type_map.get(py_type, String)
+        columns.append(Column(column_name, col_type, nullable=True))
 
     return columns
 
@@ -219,30 +229,30 @@ class EntityStatus(BaseModel):
     entity_name: str
     has_data: bool
 
-# Function to create the "facilioo_entities_with_status" table
-def create_facilioo_entities_with_status_table():
+# Function to create the "impower_entities_with_status" table
+def create_impower_entities_with_status_table():
     try:
         # Define the table schema
         metadata = MetaData()
-        facilioo_entities_with_status = Table(
-            "facilioo_entities_with_status",
+        impower_entities_with_status = Table(
+            "impower_entities_with_status",
             metadata,
             Column("entity_name", String, nullable=False, primary_key=True),  # Entity name (primary key)
             Column("has_data", Boolean, nullable=False),  # Boolean flag for data status
         )
         # Create the table in the database
         metadata.create_all(engine)
-        logger.info("Table 'facilioo_entities_with_status' created successfully.")
+        logger.info("Table 'impower_entities_with_status' created successfully.")
     except Exception as e:
-        logger.error(f"Error creating table 'facilioo_entities_with_status': {e}")
+        logger.error(f"Error creating table 'impower_entities_with_status': {e}")
         raise
 
 # Endpoint to fetch entities with status from the database
-@app.get("/get-facilioo-entities-with-status", response_model=List[EntityStatus])
-def get_facilioo_entities_with_status(db: Session = Depends(get_db)):
+@app.get("/get-impower-entities-with-status", response_model=List[EntityStatus])
+def get_impower_entities_with_status(db: Session = Depends(get_db)):
     try:
         # Query the database to fetch all entities with their status
-        stmt = text("SELECT entity_name, has_data FROM facilioo_entities_with_status")
+        stmt = text("SELECT entity_name, has_data FROM impower_entities_with_status")
         result = db.execute(stmt)
         entities_with_status = [{"entity_name": row[0], "has_data": row[1]} for row in result]
         return entities_with_status
@@ -254,92 +264,336 @@ def strip_html_tags(text):
     clean = re.sub(r'<.*?>', '', text)
     return clean.strip() 
 
-def fetch_and_save_entity_data(access_token: str, entity_name: str):
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
-    }
 
-    # Pagination settings
-    page_size = 20  # Number of records per page
-    page_number = 1   # Start with the first page
-    total_records = 0
-    table_name = None  # Initialize table_name outside the try block
-    inferred_columns = []  # Store inferred columns
+def get_table_class(table_name: str) -> Table:
+    """Dynamically get the SQLAlchemy Table class for the given table name"""
+    # This should return your actual table class - adjust according to your models
+    # For example, if you have a Properties model:
+
+    raise ValueError(f"Unknown table: {table_name}")
+
+def insert_entity_data(table_name: str, records: List[Dict]) -> int:
+    """Universal function to insert records for any entity"""
+    if not records:
+        raise HTTPException(
+            status_code=400,
+            detail="No records provided for insertion"
+        )
 
     try:
-        while True:
-            # Fetch data for the current page
-            logger.info(f"Fetching page {page_number} for entity: {entity_name}")
-            response = requests.get(
-                f"{API_URL}/api/{entity_name}",
-                headers=headers,
-                params={
-                    "PageSize": page_size,
-                    "PageNumber": page_number,
-                    "AscendingOrder": True,
-                },
-            )
-            if response.status_code != 200:
-                logger.error(f"Failed to fetch data for entity {entity_name}: {response.text}")
-                break
+        with SessionLocal() as session:
+            # Reflect the table structure from database
+            metadata = MetaData()
+            table = Table(table_name, metadata, autoload_with=session.bind)
+            
+            # Prepare data for insertion
+            validated_records = []
+            for record in records:
+                processed_record = {}
+                for column in table.columns:
+                    col_name = column.name
+                    # Set NULL for missing required fields (except primary key)
+                    if col_name not in record and not column.primary_key:
+                        processed_record[col_name] = None
+                    else:
+                        processed_record[col_name] = record.get(col_name)
+                validated_records.append(processed_record)
 
-            entity_data = response.json().get("items", [])
-            if not entity_data:
-                logger.info(f"No more data found for entity {entity_name}.")
-                break
-            table_name = table_entity_name(entity_name)
-            if page_number == 1:
-                sample_record = {}
-                if entity_data:  # If data is fetched, use the first record to infer the schema
-                    for record in entity_data:
-                        sample_record.update(record)
-                else:  # If no data is fetched, create an empty table with default columns
-                    sample_record = {"id": 1, "name": "default", "created_at": datetime.now()}  # Example default columns
-                logger.info(f"Creating table for entity: {table_name}")
-                inferred_columns = create_table_for_entity(table_name, sample_record)
-            # Save data to the database
-            db = SessionLocal()
+            # Execute bulk insert
+            stmt = table.insert().values(validated_records)
+            result = session.execute(stmt)
+            session.commit()
+            return len(validated_records)
+
+    except SQLAlchemyError as e:
+        logger.error(f"Database insertion error: {str(e)}")
+        session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Data insertion failed: {str(e)}"
+        )
+    
+@app.post("/fetch-and-save-entity")
+async def fetch_and_save_entity(
+    entity_name: str, 
+    background_tasks: BackgroundTasks, 
+    authorization: Optional[str] = Header(None),
+    page: int = 0,
+    size: int = 30
+):
+    """Fetch entity data from impower API and handle both JSON and XML responses"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    access_token = authorization.split("Bearer ")[1]
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json, application/xml"
+        }
+
+        params = {"size": size, "page": page}
+        url = f"{API_URL}/{entity_name}"
+        
+        response = requests.get(url, headers=headers, params=params)
+        
+        # Handle XML responses (SEPA/CAMT)
+        if 'application/xml' in response.headers.get('Content-Type', ''):
             try:
-                logger.info(f"Saving {len(entity_data)} records from page {page_number} for entity {table_name}")
-                for record in entity_data:
-                    record_dict = {k.lower(): v for k, v in record.items() if k != "id"}  # Convert keys to lowercase                        
-                    for column_name, value in record_dict.items():
-                        if is_boolean_like(value):  # Convert boolean-like values to proper booleans
-                            record_dict[column_name] = convert_to_boolean(value)
-                    for column_name, value in record_dict.items():
-                        if isinstance(value, (dict, list)):
-                            record_dict[column_name] = json.dumps(value)  # Convert complex types to JSON
-                        elif isinstance(value, str):
-                            record_dict[column_name] = strip_html_tags(value)  # Remove HTML tags
-                    escaped_columns = [f'"{col}"' if col.lower() in RESERVED_KEYWORDS else col for col in record_dict.keys()]
-                    stmt = text(f"""
-                        INSERT INTO {table_name} (id, {', '.join(escaped_columns)})
-                        VALUES (:id, {', '.join([f':{k}' for k in record_dict.keys()])})
-                        ON CONFLICT (id) DO UPDATE SET
-                        {', '.join([f'"{col}" = EXCLUDED."{col}"' if col.lower() in RESERVED_KEYWORDS else f"{col} = EXCLUDED.{col}" for col in record_dict.keys()])}
-                    """)
-                    logger.debug(f"Executing SQL: {stmt}")
-                    db.execute(stmt, {"id": record["id"], **record_dict})
+                ET.fromstring(response.text)  # Validate XML
+                return PlainTextResponse(
+                    content=response.text,
+                    media_type="application/xml",
+                    headers={"X-Entity-Type": "xml-document"}
+                )
+            except ET.ParseError as e:
+                logger.error(f"Invalid XML received: {str(e)}")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Received malformed XML document"
+                )
+        
+        # Handle JSON responses
+        if response.status_code != 200:
+            error_detail = {
+                "status_code": response.status_code,
+                "response_text": response.text[:200],
+                "request_url": response.request.url,
+            }
+            logger.error(f"API request failed: {json.dumps(error_detail, indent=2)}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"API request failed: {response.text[:200]}"
+            )
 
-                db.commit()
-                total_records += len(entity_data)
-                logger.info(f"Successfully saved {len(entity_data)} records from page {page_number} for entity {table_name}")
-            except Exception as e:
-                logger.error(f"Error saving data for entity {table_name if table_name else entity_name}: {str(e)}")
-                db.rollback()
-            finally:
-                db.close()
+        try:
+            data = response.json()
+        except ValueError:
+            raise HTTPException(
+                status_code=422,
+                detail="Invalid JSON response from API"
+            )
 
-            # Move to the next page
-            page_number += 1
+        content = data.get("content", [])
+        if not content:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No data found for entity {entity_name}"
+            )
 
-        logger.info(f"Total records saved for entity {table_name if table_name else entity_name}: {total_records}")
-        return {"success": True, "columns": inferred_columns, "total_records": total_records}  # Return inferred columns and total records
+        records = []
+        seen_ids = set()
+        
+        for item in content:
+            if isinstance(item, dict) and len(item) == 1:
+                record = next(iter(item.values()))
+                if isinstance(record, list):
+                    record = record[0] if record else {}
+            else:
+                record = item
+            
+            if not isinstance(record, dict):
+                continue
+            if 'id' not in record:
+                logger.warning(f"Record missing ID: {record}")
+                continue
+            if record['id'] in seen_ids:
+                logger.warning(f"Duplicate ID found: {record['id']}")
+                continue
+            seen_ids.add(record['id'])
+            records.append(record)
+
+        if not records:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No valid records found for entity {entity_name}"
+            )
+
+        first_record = records[0]
+        table_name = sanitize_table_name(entity_name)
+        
+        page_info = PageInfo(
+            current_page=page,
+            page_size=size,
+            total_pages=data.get("totalPages", 1),
+            total_elements=data.get("totalElements", len(records))
+        )
+
+        try:
+            created_columns = create_table_for_entity(
+                entity_name=table_name,
+                sample_record=first_record
+            )
+            
+            inserted_count = insert_entity_data(
+                table_name=table_name,
+                records=records
+            )
+        except Exception as e:
+            logger.error(f"Database error: {str(e)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database operation failed: {str(e)}"
+            )
+
+        return JSONResponse(
+            content=EntityResponse(
+                success=True,
+                message=f"Entity {entity_name} processed successfully",
+                data={
+                    "table_name": table_name,
+                    "columns": created_columns,
+                    "sample_data": first_record,
+                    "inserted_count": inserted_count
+                },
+                page_info=page_info
+            ).model_dump()  # Use model_dump() instead of dict()
+        )
+
+
+    except HTTPException:
+        raise
+    except requests.RequestException as e:
+        logger.error(f"Network error: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily unavailable"
+        )
     except Exception as e:
-        logger.error(f"Error fetching data for entity {table_name if table_name else entity_name}: {str(e)}")
-        raise  # Re-raise the exception to stop further execution
+        logger.error(f"Unexpected error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error"
+        )
+
+
+async def fetch_entity_data(
+    access_token: str,
+    entity_name: str,
+    page: int = 0,
+    size: int = 30
+) -> Dict:
+    """Fetch data for a specific entity with proper record extraction"""
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    params = {
+        "size": size,
+        "page": page
+    }
+    
+    try:
+        # Handle entity-specific endpoints
+        if entity_name.lower() == "documents":
+            response = requests.get(f"{API_URL}/documents", headers=headers, params=params)
+        elif entity_name.lower() == "invoices":
+            response = requests.get(f"{API_URL}/invoices", headers=headers, params=params)
+        elif entity_name.lower() == "contacts":
+            response = requests.get(f"{API_URL}/contacts", headers=headers, params=params)
+        else:
+            response = requests.get(f"{API_URL}/{entity_name}", headers=headers, params=params)
+
+        if response.status_code != 200:
+            error_detail = {
+                "status_code": response.status_code,
+                "response_text": response.text[:200],
+                "request_url": response.request.url,
+            }
+            logger.error(f"API request failed: {json.dumps(error_detail, indent=2)}")
+            raise HTTPException(
+                status_code=response.status_code,
+                detail=f"API request failed: {response.text[:200]}"
+            )
+
+        data = response.json()
+        content = data.get("content", [])
+
+        if not content:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No data found for entity {entity_name}"
+            )
+
+        # Process records - ensure each has unique ID
+        records = []
+        seen_ids = set()
+        
+        for item in content:
+            # Handle nested entity structure if present
+            if isinstance(item, dict) and len(item) == 1:
+                # Case where entity is nested under a single key
+                record = next(iter(item.values()))
+                if isinstance(record, list):
+                    # If the value is a list, take first item
+                    record = record[0] if record else {}
+            else:
+                record = item
+            
+            # Ensure record has an ID and it's unique in this batch
+            if not isinstance(record, dict):
+                continue
+            if 'id' not in record:
+                logger.warning(f"Record missing ID: {record}")
+                continue
+            if record['id'] in seen_ids:
+                logger.warning(f"Duplicate ID found: {record['id']}")
+                continue
+            seen_ids.add(record['id'])
+            records.append(record)
+        if not records:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No valid records found for entity {entity_name}"
+            )
+        # Use first record for schema
+        first_record = records[0]
+        table_name = sanitize_table_name(entity_name)
+        
+        # Get pagination info
+        page_info = {
+            "current_page": page,
+            "page_size": size,
+            "total_pages": data.get("totalPages", 1),
+            "total_elements": data.get("totalElements", len(records))
+        }
+
+        return {
+            "table_name": table_name,
+            "sample_data": first_record,
+            "records": records,
+            "page_info": page_info
+        }
+
+    except HTTPException:
+        raise
+    except requests.RequestException as e:
+        logger.error(f"Network error fetching {entity_name}: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Network error accessing {entity_name} API"
+        )
+
+def sanitize_table_name(entity_name: str) -> str:
+    """Convert entity name to safe table name"""
+    return entity_name.lower().replace('-', '_')
+
+def extract_columns(record: Dict) -> List[str]:
+    """Extract and clean column names from a record"""
+    columns = []
+    for key in record.keys():
+        clean_key = key.lower().replace(' ', '_')
+        if needs_quoting(clean_key):
+            clean_key = f'"{clean_key}"'
+        columns.append(clean_key)
+    return columns
+
+def needs_quoting(column_name: str) -> bool:
+    """Check if column name needs SQL quoting"""
+    return (column_name.lower() in RESERVED_KEYWORDS or 
+            not column_name.replace('_', '').isalnum())
 
 class CRMEntityLinkRequest(BaseModel):
     entity_name: str
@@ -361,10 +615,9 @@ async def get_crm_entity_link(entity_name: str, authorization: Optional[str] = H
         raise HTTPException(status_code=500, detail=f"Error generating CRM entity link: {str(e)}")
 
 
-# Endpoint to fetch and save entity status
-@app.post("/facilioo-entities-with-status")
-def get_facilioo_entities_with_status(
-    request: FaciliooEntitiesRequest,
+@app.post("/impower-entities-with-status")
+async def get_impower_entities_with_status(
+    request: impowerEntitiesRequest,
     db: Session = Depends(get_db)
 ):
     access_token = request.access_token
@@ -373,104 +626,217 @@ def get_facilioo_entities_with_status(
 
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
+        "accept": "application/json"
     }
-    entities = FACILIOO_ENTITIES  # Replace with your actual list of entities
+    
+    # List of entities to check (adjust as needed)
+    entities = IMPOWER_ENTITIES
+    
     entities_with_status = []
 
-    # Fetch data for each entity
+    # First verify the API is reachable
+    try:
+        test_response = requests.get(
+            f"{API_URL}/properties",
+            headers=headers,
+            timeout=5
+        )
+        if test_response.status_code == 404:
+            raise HTTPException(
+                status_code=400,
+                detail="API endpoint not found. Please verify the base URL"
+            )
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"API connection failed: {str(e)}"
+        )
+
+    # Check each entity
     for entity in entities:
         try:
             logger.info(f"Checking status for entity: {entity}")
+            
+            # Try the direct endpoint first
             response = requests.get(
-                f"{API_URL}/api/{entity}",
+                f"{API_URL}/{entity}",
                 headers=headers,
-                params={"PageSize": 1, "PageNumber": 1, "AscendingOrder": True},
+                timeout=5
             )
-
+            
             if response.status_code == 200:
-                entity_data = response.json().get("items", [])
-                if entity_data:
-                    entities_with_status.append({"entity_name": entity, "has_data": True})  # Entity has data
-                else:
-                    logger.info(f"Entity {entity} has no data.")
-                    entities_with_status.append({"entity_name": entity, "has_data": False})  # Entity has no data
+                entities_with_status.append({
+                    "entity_name": entity,
+                    "has_data": True,
+                    "status": "active"
+                })
             else:
-                logger.warning(f"Failed to fetch data for entity {entity}. Status code: {response.status_code}")
-                entities_with_status.append({"entity_name": entity, "has_data": False})  # Assume no data if API call fails
-        except Exception as e:
-            logger.error(f"Error checking status for entity {entity}: {str(e)}", exc_info=True)
-            entities_with_status.append({"entity_name": entity, "has_data": False})  # Assume no data on error
+                # If direct endpoint fails
+                response = requests.get(
+                    f"{API_URL}/{entity}",
+                    headers=headers,
+                    timeout=5
+                )
+                
+                if response.status_code == 200:
+                    entities_with_status.append({
+                        "entity_name": entity,
+                        "has_data": True,
+                        "status": "active"
+                    })
+                else:
+                    entities_with_status.append({
+                        "entity_name": entity,
+                        "has_data": False,
+                        "status": "inactive"
+                    })
+                    logger.warning(f"Entity {entity} not found")
 
-    # Save the results to the database
+        except Exception as e:
+            logger.error(f"Error checking entity {entity}: {str(e)}")
+            entities_with_status.append({
+                "entity_name": entity,
+                "has_data": False,
+                "status": "error"
+            })
+
+    # Save results to database
     try:
         for entity_status in entities_with_status:
             stmt = text("""
-                INSERT INTO facilioo_entities_with_status (entity_name, has_data)
-                VALUES (:entity_name, :has_data)
+                INSERT INTO impower_entities_with_status (entity_name, has_data, last_checked)
+                VALUES (:entity_name, :has_data, CURRENT_TIMESTAMP)
                 ON CONFLICT (entity_name) DO UPDATE SET
-                has_data = EXCLUDED.has_data
+                has_data = EXCLUDED.has_data,
+                last_checked = CURRENT_TIMESTAMP
             """)
-            db.execute(stmt, entity_status)
+            db.execute(stmt, {
+                "entity_name": entity_status["entity_name"],
+                "has_data": entity_status["has_data"]
+            })
         db.commit()
-        logger.info("Successfully saved entities with status to the database.")
     except Exception as e:
         db.rollback()
-        logger.error(f"Error saving entities with status to the database: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Database error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save entity status"
+        )
 
-    return entities_with_status
+    return {
+        "results": entities_with_status,
+        "success": True,
+        "count": len(entities_with_status),
+        "active_count": sum(1 for e in entities_with_status if e["has_data"])
+    }
+
 
 class ExportEntityRequest(BaseModel):
     entity_name: str
 
-
-
-
-
-
-
 def create_sample_record(schema: List[Column]) -> Dict[str, Any]:
+    """Create a sample record with type-appropriate default values"""
     sample_record = {}
     for column in schema:
-        if column.type.python_type == str:
-            sample_record[column.name] = ""
-        elif column.type.python_type == int:
-            sample_record[column.name] = 0
-        elif column.type.python_type == float:
-            sample_record[column.name] = 0.0
-        elif column.type.python_type == bool:
-            sample_record[column.name] = False
-        elif column.type.python_type == dict or column.type.python_type == list:
-            sample_record[column.name] = {}
-        elif column.type.python_type == datetime:
-            sample_record[column.name] = datetime.now()
-        else:
+        try:
+            if column.type == str:
+                sample_record[column.name] = "sample_value"
+            elif column.type == int:
+                sample_record[column.name] = 0
+            elif column.type == float:
+                sample_record[column.name] = 0.0
+            elif column.type == bool:
+                sample_record[column.name] = False
+            elif column.type == dict:
+                sample_record[column.name] = {"key": "value"}
+            elif column.type == list:
+                sample_record[column.name] = ["item1", "item2"]
+            elif column.type == datetime:
+                sample_record[column.name] = datetime.now().isoformat()
+            else:
+                sample_record[column.name] = None
+        except Exception as e:
+            logger.warning(f"Couldn't set default value for {column.name}: {str(e)}")
             sample_record[column.name] = None
     return sample_record
 
-
-def fetch_single_entity_data(access_token: str, entity_name: str, limit: int = 10) -> List[Dict[str, Any]]:
+def fetch_single_entity_data(
+    access_token: str,
+    entity_name: str,
+    entity_id: Optional[str] = None,
+    page: int = 0,  # Changed from 1 to 0 to match API standard
+    size: int = 10
+) -> Dict[str, Any]:
+    """
+    Fetch data from the API with proper pagination and error handling
+    Returns the full response including pagination metadata
+    """
     headers = {
-        "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
+        "Authorization": f"Bearer {access_token}"
+                }
+    
+    # Enforce API limits
+    size = min(size, 100)  # Maximum page size per API requirements
+    
+    params = {
+        "page": page,
+        "size": size
     }
+    
     try:
-        response = requests.get(
-            f"{API_URL}/api/{entity_name}",
-            headers=headers,
-            params={"PageSize": limit, "PageNumber": 1, "AscendingOrder": True},
-        )
+        # Handle different endpoint patterns
+        if entity_id:
+            # Single entity by ID
+            url = f"{API_URL}/{entity_name}/{entity_id}"
+            response = requests.get(url, headers=headers, timeout=10)
+        else:
+            # Paginated list
+            url = f"{API_URL}/{entity_name}"
+            response = requests.get(url, headers=headers, params=params, timeout=10)
+        
         if response.status_code != 200:
-            logger.error(f"Failed to fetch data for entity {entity_name}: {response.text}")
-            return []
-        return response.json().get("items", [])
-    except Exception as e:
-        logger.error(f"Error fetching data for entity {entity_name}: {str(e)}")
-        return []
-
+            error_msg = f"API request failed: {response.status_code} - {response.text[:200]}"
+            logger.error(error_msg)
+            return {
+                "success": False,
+                "error": error_msg,
+                "status_code": response.status_code
+            }
+        
+        data = response.json()
+        
+        # Standardize response format
+        if entity_id:
+            return {
+                "success": True,
+                "data": data,
+                "page_info": {
+                    "current_page": 0,
+                    "page_size": 1,
+                    "total_pages": 1,
+                    "total_elements": 1
+                }
+            }
+        else:
+            return {
+                "success": True,
+                "data": data.get("content", []),
+                "page_info": {
+                    "current_page": data.get("pageable", {}).get("pageNumber", page),
+                    "page_size": data.get("pageable", {}).get("pageSize", size),
+                    "total_pages": data.get("totalPages", 1),
+                    "total_elements": data.get("totalElements", 0)
+                }
+            }
+            
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Network error fetching {entity_name}: {str(e)}"
+        logger.error(error_msg)
+        return {
+            "success": False,
+            "error": error_msg,
+            "status_code": 503
+        }
 
 
 class ExportRequest(BaseModel):
@@ -485,7 +851,7 @@ def fetch_and_export_entity_data(
         access_token = request.access_token
         all_data = {}
 
-        for entity in FACILIOO_ENTITIES:
+        for entity in IMPOWER_ENTITIES:
             logger.info(f"Fetching data for entity: {entity}")
             data = fetch_single_entity_data(access_token, entity)
             if data:
@@ -511,7 +877,7 @@ def fetch_and_export_entity_data(
                     all_data[entity] = []
 
         # Export data to Excel
-        excel_file_path = export_all_entities_to_excel(all_data, "facilioo_export")
+        excel_file_path = export_all_entities_to_excel(all_data, "impower_export")
         if background_tasks:
             background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
         logger.info(f"Data exported to Excel file: {excel_file_path}")
@@ -580,36 +946,75 @@ def fetch_and_export_entity_data(
         raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
 
 @app.post("/fetch-entity-fields")
-async def fetch_entity_fields(entity_name: str, authorization: str = Header(None)):
+async def fetch_entity_fields(
+    entity_name: str, 
+    authorization: str = Header(None),
+    page: int = 1,
+    size: int = 1,
+    sort: str = "name",
+    order: str = "ASC"
+):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     access_token = authorization.split("Bearer ")[1]
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "accept": "application/json",
-        "api-version": "1.0",
+        "accept": "application/json"
+    }
+
+    params = {
+        "page": page,
+        "size": size,
+        "sort": sort,
+        "order": order.upper()
     }
 
     try:
-        response = requests.get(f"{API_URL}/api/{entity_name}", headers=headers, params={"PageSize": 1, "PageNumber": 1})
-        
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"Failed to fetch entity data: {response.text}")
+        # Try both endpoint variations
+        for endpoint in [f"{API_URL}/{entity_name}", f"{API_URL}/api/{entity_name}"]:
+            response = requests.get(
+                endpoint,
+                headers=headers,
+                params=params
+            )
+            if response.status_code == 200:
+                entity_data = response.json().get("items", [])
+                if not entity_data:
+                    return {
+                        "success": False, 
+                        "message": f"No data found for entity {entity_name}",
+                        "columns": []
+                    }
 
-        entity_data = response.json().get("items", [])
-        if not entity_data:
-            return {"success": False, "message": f"No data found for entity {entity_name}", "columns": []}
+                # Extract field names from the first record
+                sample_record = entity_data[0]
+                columns = [col.lower() for col in sample_record.keys()]
+                
+                return {
+                    "success": True,
+                    "columns": columns,
+                    "sort_field": sort,
+                    "sort_order": order,
+                    "page_info": {
+                        "current_page": page,
+                        "page_size": size
+                    }
+                }
 
-        # Extract field names from the first record and convert them to lowercase
-        sample_record = entity_data[0] if entity_data else {}
-        columns = [col.lower() for col in sample_record.keys()]
+        raise HTTPException(
+            status_code=response.status_code,
+            detail=f"Failed to fetch entity data: {response.text}"
+        )
 
-        return {"success": True, "columns": columns}
-
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching entity fields: {str(e)}")
-
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching entity fields: {str(e)}"
+        )
+    
 def fetch_all_entity_data_from_staging(db: Session, entity_name: str) -> list:
     logger.info(f"Fetching all data from staging for entity: {entity_name}")
 
@@ -664,12 +1069,12 @@ def fetch_entity_data_from_staging(db: Session, entity_name: str, matched_fields
         for record in records:
             processed_record = {}
             for field_pair in matched_fields:  # Iterate over the list of field strings
-                facilioo_field, crm_field = field_pair.split('-')
-                if facilioo_field in record:  # Ensure the source field exists
-                    processed_record[facilioo_field] = record[facilioo_field]
+                impower_field, crm_field = field_pair.split('-')
+                if impower_field in record:  # Ensure the source field exists
+                    processed_record[impower_field] = record[impower_field]
                 else:
-                    logger.warning(f"Facilioo field '{facilioo_field}' not found in record for entity: {entity_name}")
-                    processed_record[facilioo_field] = None  # Handle missing fields safely
+                    logger.warning(f"impower field '{impower_field}' not found in record for entity: {entity_name}")
+                    processed_record[impower_field] = None  # Handle missing fields safely
             processed_records.append(processed_record)
 
         logger.debug(f"Sample processed record: {processed_records[0] if processed_records else 'No records found'}")  # Debug log
@@ -693,18 +1098,6 @@ async def get_total_rows(entity_name: str):
     except Exception as e:
         logger.error(f"Error fetching total rows for entity {entity_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching total rows for entity {entity_name}: {str(e)}")
-
-@app.post("/fetch-and-save-entity")
-async def fetch_and_save_entity(entity_name: str, background_tasks: BackgroundTasks, authorization: Optional[str] = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    access_token = authorization.split("Bearer ")[1]
-    try:
-        result = fetch_and_save_entity_data(access_token, entity_name)
-        return {"success": True, "message": f"Entity {entity_name} data fetching and saving initiated", "columns": result["columns"]}
-    except Exception as e:
-        logger.error(f"Error fetching and saving entity {entity_name}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching and saving entity {entity_name}: {str(e)}")
 
 @app.get("/stream-progress")
 async def stream_progress(entity_name: str):
@@ -737,7 +1130,7 @@ def table_entity_name(name: str) -> str:
     return cleaned_name
 
 class MatchingRequest(BaseModel):
-    selectedFaciliooEntity: str
+    selectedimpowerEntity: str
     selectedCrmEntity: str
     matchedFields: List[str]
 
@@ -747,11 +1140,11 @@ async def save_matching_columns(request: MatchingRequest, authorization: str = H
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        selectedFaciliooEntity = table_entity_name(request.selectedFaciliooEntity)
+        selectedimpowerEntity = table_entity_name(request.selectedimpowerEntity)
         selectedCrmEntity = table_entity_name(request.selectedCrmEntity)
-        if not selectedFaciliooEntity or not selectedCrmEntity:
+        if not selectedimpowerEntity or not selectedCrmEntity:
             raise HTTPException(status_code=400, detail="Both entities must be provided.")
-        entity_pair = f"{selectedFaciliooEntity}-{selectedCrmEntity}"
+        entity_pair = f"{selectedimpowerEntity}-{selectedCrmEntity}"
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS matching_table (
                 entity_pair TEXT PRIMARY KEY,
@@ -822,17 +1215,17 @@ async def get_entity_data(entity_name: str, db: Session = Depends(get_db), autho
         raise HTTPException(status_code=500, detail=f"Error fetching entity data: {str(e)}")
     
 @app.get("/get-matching-fields")
-async def get_matching_fields(selectedFaciliooEntity: str, selectedCrmEntity: str, authorization: str = Header(None)):
+async def get_matching_fields(selectedimpowerEntity: str, selectedCrmEntity: str, authorization: str = Header(None)):
     db = SessionLocal()
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        selectedFaciliooEntity = table_entity_name(selectedFaciliooEntity)
+        selectedimpowerEntity = table_entity_name(selectedimpowerEntity)
         #selectedCrmEntity = table_entity_name(selectedCrmEntity)
-        if not selectedFaciliooEntity or not selectedCrmEntity:
+        if not selectedimpowerEntity or not selectedCrmEntity:
             raise HTTPException(status_code=400, detail="Both entities must be provided.")
-        entity_pair = f"{selectedFaciliooEntity}-{selectedCrmEntity}"
+        entity_pair = f"{selectedimpowerEntity}-{selectedCrmEntity}"
         existing_row = db.execute(
             text("SELECT matched_fields FROM matching_table WHERE entity_pair = :entity_pair"),
             {"entity_pair": entity_pair}).fetchone()
@@ -850,70 +1243,81 @@ async def get_matching_fields(selectedFaciliooEntity: str, selectedCrmEntity: st
 def random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
 
-async def authenticate_by_email(email: str, password: str, two_factor_code: str = None):
-    payload = {
-        "email": email,
-        "password": password,
-        "twoFactorCode": two_factor_code,
-        "skipMultiFactorAuthentication": True,
+
+async def verify_api_key(api_key: str):
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
     }
-    headers = {"Content-Type": "application/json"}
-    logger.info(f"Sending authentication payload: {payload}")
+    
     try:
+        # Use the known working endpoint from your curl example
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_URL}/api/auth/login", headers=headers, json=payload)
-        logger.info(f"API response status: {response.status_code}")
-        logger.info(f"API response text: {response.text}")
-
+            response = await client.get(
+                f"{API_URL}/properties",
+                headers=headers
+            )
+        
         if response.status_code == 200:
-            auth_data = response.json()
-            logger.info(f"Raw API response: {auth_data}")
+            return True
+        return False
 
-            # Handle 2FA requirement
-            if auth_data.get("twoFactorRequired") and not two_factor_code:
-                return {
-                    "success": False,
-                    "twoFactorRequired": True,
-                    "message": "2FA code required",
-                }
+    except httpx.RequestError as e:
+        logger.error(f"HTTP request error: {str(e)}")
+        return False
 
-            # Ensure access token is present
-            if "accessToken" not in auth_data:
-                raise ValueError("Access token missing in response")
+@app.post("/authenticate")
+async def authenticate(request: Request):
+    logger.info("API key authentication attempt")
+    
+    try:
+        # Get API key from request body
+        body = await request.json()
+        api_key = body.get("api_key")
+        
+        if not api_key:
+            logger.error("No API key provided")
+            raise HTTPException(
+                status_code=401,
+                detail="API key is required"
+            )
 
+        # Verify the API key by making a request to a working endpoint
+        is_valid = await verify_api_key(api_key)
+        
+        if is_valid:
+            logger.info("Authentication successful with API key")
+            log_migration_result(
+                user_id=-1,
+                staging_status="authentication_success",
+                crm_status="not_updated",
+                crm_entity_updated=False,
+                error_message=None
+            )
             return {
-                "success": True,
-                "accessToken": auth_data["accessToken"],
-                "refreshToken": auth_data.get("refreshToken"),
+                "access_token": api_key,
+                "token_type": "bearer"
             }
+        else:
+            logger.warning("API key authentication failed")
+            log_migration_result(
+                user_id=-1,
+                staging_status="authentication_failed",
+                crm_status="not_updated",
+                crm_entity_updated=False,
+                error_message="Invalid API key or insufficient permissions"
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid API key or insufficient permissions"
+            )
 
-        # Handle non-200 status codes
-        error_message = f"Authentication failed: {response.text}"
-        logger.error(error_message)
-        return {"success": False, "message": error_message}
-
-    except httpx.RequestError as e:
-        logger.error(f"HTTP request error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Authentication service unavailable")
-
-    except ValueError as e:
-        logger.error(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/refresh-token")
-async def refresh_token(refresh_token: str):
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {refresh_token}"}
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(f"{API_URL}/api/auth/refresh", headers=headers)
-        if response.status_code == 200:
-            new_tokens = response.json()
-            return {"access_token": new_tokens["accessToken"], "refresh_token": new_tokens["refreshToken"]}
-        logger.error(f"Token refresh failed: {response.text}")
-        raise HTTPException(status_code=response.status_code, detail="Failed to refresh token")
-    except httpx.RequestError as e:
-        logger.error(f"HTTP request error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Token refresh service unavailable")
+    except Exception as e:
+        logger.error(f"Error during API key authentication: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error during authentication"
+        )
 
 
 def correct_entity_name(entity_name: str) -> str:
@@ -1279,49 +1683,6 @@ async def fetch_crm_entity_fields(entity_name: str, authorization: Optional[str]
         logger.error(f"Error fetching CRM entity fields: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching CRM entity fields: {str(e)}")
 
-@app.post("/authenticate")
-async def authenticate(request: AuthRequest):
-    logger.info(f"Authentication attempt for email: {request.email}")
-
-    try:
-        auth_response = await authenticate_by_email(request.email, request.password, request.twoFactorCode)
-        
-        # Handle 2FA requirement
-        if auth_response.get("twoFactorRequired"):
-            logger.info(f"2FA required for email: {request.email}")
-            return {"twoFactorRequired": True, "message": "2FA code required"}
-
-        # Handle successful authentication
-        if auth_response.get("success"):
-            access_token = auth_response["accessToken"]
-            refresh_token = auth_response.get("refreshToken")  # This might be None
-            logger.info(f"Authentication successful for email: {request.email}, Access Token: {access_token}")
-            log_migration_result(
-                user_id=-1,  # Use -1 for system-level logs
-                staging_status="authentication_success",
-                crm_status="not_updated",
-                crm_entity_updated=False,
-                error_message=None
-            )
-            return {"access_token": access_token, "refresh_token": refresh_token}
-
-        # Handle authentication failure
-        else:
-            logger.warning(f"Authentication failed for email: {request.email}")
-            log_migration_result(
-                user_id=-1,  # Use -1 for system-level logs
-                staging_status="authentication_failed",
-                crm_status="not_updated",
-                crm_entity_updated=False,
-                error_message=auth_response.get("message", "Unknown error")
-            )
-            raise HTTPException(status_code=401, detail=auth_response.get("message", "Authentication failed"))
-
-    except Exception as e:
-        logger.error(f"Error during authentication: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 def extract_record_id_from_error(response):
     try:
         error_data = response.json()
@@ -1416,18 +1777,18 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
     crm_data = {}
     failed_fields = []  # Track fields that fail validation or processing
 
-    # Iterate over the matched fields (now a list of strings in the format 'facilioo_field-crm_field')
+    # Iterate over the matched fields (now a list of strings in the format 'impower_field-crm_field')
     for field_pair in matched_fields:
-        # Split the string into 'facilioo_field' and 'crm_field'
-        facilioo_field, crm_field = field_pair.split('-')
+        # Split the string into 'impower_field' and 'crm_field'
+        impower_field, crm_field = field_pair.split('-')
         crm_field = crm_field.replace(' *', '').strip()
         crm_field = crm_field.replace(' +', '').strip()
 
-        logger.info(f"Processing source field: {facilioo_field}, CRM field: {crm_field}.")
+        logger.info(f"Processing source field: {impower_field}, CRM field: {crm_field}.")
 
-        # Check if the facilioo_field exists in the entity data
-        if facilioo_field in entity_data:
-            field_value = entity_data[facilioo_field]
+        # Check if the impower_field exists in the entity data
+        if impower_field in entity_data:
+            field_value = entity_data[impower_field]
             
             # Handle null values first
             if field_value is None:
@@ -1458,12 +1819,12 @@ def migrate_entity_to_crm(entity_data: dict, matched_fields: list, selected_crm_
                     crm_data[crm_field] = guid_value  # Assign GUID directly
                 else:
                     logger.warning(f"Invalid GUID value for '{crm_field}'. Skipping field.")
-                    failed_fields.append(f"{facilioo_field}-{crm_field}")
+                    failed_fields.append(f"{impower_field}-{crm_field}")
 
             else:
                 # Anonymize sensitive data based on field type
-                if facilioo_field.lower() in ['name', 'lastname', 'firstname', 'fullname', 'email', 'phone', 'phonenumber']:
-                    anonymized_value = anonymize_data(str(field_value), facilioo_field.lower())
+                if impower_field.lower() in ['name', 'lastname', 'firstname', 'fullname', 'email', 'phone', 'phonenumber']:
+                    anonymized_value = anonymize_data(str(field_value), impower_field.lower())
                     crm_data[crm_field] = anonymized_value
                 else:
                     if crm_field == 'name':
@@ -1663,10 +2024,10 @@ def export_entity_to_excel(data: list, entity_name: str, matched_fields: list) -
             if not isinstance(field_pair, str):
                 raise ValueError(f"Invalid field_pair in matched_fields: {field_pair}. Expected a string.")
 
-            facilioo_field, crm_field = field_pair.split('-')
+            impower_field, crm_field = field_pair.split('-')
 
-            if facilioo_field in record:
-                value = record[facilioo_field]
+            if impower_field in record:
+                value = record[impower_field]
                 field_type = None
 
                 # ✅ Ensure crm_field is a string before using .lower()
@@ -1812,7 +2173,7 @@ def fetch_entity_data_in_chunks(db: Session, entity_name: str, matched_fields: l
         offset += chunk_size
 
 class MigrateEntityRequest(BaseModel):
-    selected_facilioo_entity: str
+    selected_impower_entity: str
     selected_crm_entity: str
     limit_records: Optional[int] = None  # Make sure this matches the case exactly
 
@@ -1833,11 +2194,11 @@ async def migrate_entity(
     background_tasks: BackgroundTasks,
     authorization: str = Header(None)
 ):
-    selected_facilioo_entity = table_entity_name(request.selected_facilioo_entity)
+    selected_impower_entity = table_entity_name(request.selected_impower_entity)
     selected_crm_entity = request.selected_crm_entity
 
     # Fetch matched fields
-    matched_fields_response = await get_matching_fields(selected_facilioo_entity, selected_crm_entity, authorization)
+    matched_fields_response = await get_matching_fields(selected_impower_entity, selected_crm_entity, authorization)
     matched_fields_list = matched_fields_response.get("matched_fields", [])
     if not matched_fields_list:
         raise HTTPException(status_code=400, detail="No matched fields found for the selected entities.")
@@ -1845,7 +2206,7 @@ async def migrate_entity(
     # Fetch data from staging database in chunks
     with SessionLocal() as db:
         entity_data = []
-        for chunk in fetch_entity_data_in_chunks(db, selected_facilioo_entity, matched_fields_list):
+        for chunk in fetch_entity_data_in_chunks(db, selected_impower_entity, matched_fields_list):
             entity_data.extend(chunk)
 
     if not entity_data:
@@ -1868,7 +2229,7 @@ async def migrate_entity(
         "error_count": migration_result["error_count"],
         "update_count": migration_result["update_count"],
         "insert_count": migration_result["insert_count"],
-        "entity_name": selected_facilioo_entity,
+        "entity_name": selected_impower_entity,
         "results": migration_result["results"],
         "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
     }
@@ -1879,19 +2240,19 @@ async def migrate_entity(
     background_tasks: BackgroundTasks,
     authorization: str = Header(None)
 ):
-    selected_facilioo_entity = table_entity_name(request.selected_facilioo_entity)
+    selected_impower_entity = table_entity_name(request.selected_impower_entity)
     selected_crm_entity = request.selected_crm_entity
     limit_records = request.limit_records  # Get the limit from the request
 
     # Fetch matched fields
-    matched_fields_response = await get_matching_fields(selected_facilioo_entity, selected_crm_entity, authorization)
+    matched_fields_response = await get_matching_fields(selected_impower_entity, selected_crm_entity, authorization)
     matched_fields_list = matched_fields_response.get("matched_fields", [])
     if not matched_fields_list:
         raise HTTPException(status_code=400, detail="No matched fields found for the selected entities.")
 
     # Fetch data from staging database
     with SessionLocal() as db:
-        entity_data = fetch_entity_data_from_staging(db, selected_facilioo_entity, matched_fields_list)
+        entity_data = fetch_entity_data_from_staging(db, selected_impower_entity, matched_fields_list)
 
     if not entity_data:
         raise HTTPException(status_code=400, detail="No records found in the staging database.")
@@ -1968,7 +2329,7 @@ async def migrate_entity(
         "error_count": error_count,
         "update_count": update_count,
         "insert_count": insert_count,
-        "entity_name": selected_facilioo_entity,
+        "entity_name": selected_impower_entity,
         "results": results,
         "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
     }
@@ -2255,7 +2616,7 @@ async def get_index(request: Request):
 
 #@app.on_event("startup")
 #def on_startup():
-#    create_facilioo_entities_with_status_table()
+#    create_impower_entities_with_status_table()
 
 # Start FastAPI app
 if __name__ == "__main__":

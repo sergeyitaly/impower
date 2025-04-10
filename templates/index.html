@@ -40,30 +40,29 @@
 
     <div class="container mx-auto p-4">
         <h1 id="clickableHeading" class="text-3xl font-bold text-center mb-8 cursor-pointer hover:text-blue-600">
-            Facillio.de → Dynamics 365 Migration
+            Impower.de → Dynamics 365 Migration
         </h1>
-        <!-- Authentication Form -->
-        <div id="authForm" class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
+        <!-- API Key Form -->
+        <form id="authForm" class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
             <div class="mb-4">
-                <label for="email" class="block text-sm font-medium text-gray-700">Email:</label>
-                <input type="email" id="email" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Enter your email" required>
+                <label for="apiKey" class="block text-sm font-medium text-gray-700">API Key:</label>
+                <input type="password" id="apiKey" name="apiKey" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Enter your API key" required>
+                <p class="mt-2 text-sm text-gray-500">
+                    Get your API key from the Impower.de settings
+                </p>
             </div>
-            <div class="mb-4">
-                <label for="password" class="block text-sm font-medium text-gray-700">Password:</label>
-                <input type="password" id="password" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500" placeholder="Enter your password" required>
-            </div>
-            <button id="authenticateBtn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
-                <i class="fas fa-check"></i> Authenticate
+            <button type="submit" id="authenticateBtn" class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition duration-200">
+                <i class="fas fa-check"></i> Connect
             </button>
-        </div>
-
+        </form>
+       
 <div id="matchingControls" class="border-2 border-gray-300 rounded-lg bg-gray-50 mx-2 sm:mx-0" style="display: none;">
     <div class="space-y-4 p-4">
     <!-- Entity Selection and Fetch Buttons -->
     <div id="entityControls" class="flex justify-center gap-2 mt-4" style="display: none;">
-        <!-- Facilioo Entity Section -->
+        <!-- impower Entity Section -->
         <div class="bg-white p-4 rounded border text-center">
-            <label for="entitySelect" class="block text-xs font-medium text-gray-600 mb-1">Facilioo Entity</label>
+            <label for="entitySelect" class="block text-xs font-medium text-gray-600 mb-1">impower Entity</label>
             <select id="entitySelect" class="block w-full px-2 py-1 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500 text-sm">
                 <option value="">-- Select --</option>
             </select>
@@ -421,16 +420,16 @@
             }
 
             $("#saveMatchingBtn").on("click", async function () {
-                const selectedFaciliooEntity = $("#entitySelect").val();
+                const selectedimpowerEntity = $("#entitySelect").val();
                 const selectedCrmEntity = $("#entitySelectCRM").val();
                 const selectedFields = $("#matchedFieldsDropdown").val();
                 const logsContainer = document.getElementById("logsContainer");
-                if (!selectedFaciliooEntity || !selectedCrmEntity) {logsContainer.innerHTML += `<p style="color: red;">❌ Please select both Facilioo and CRM entities.</p>`;autoScrollLogs();return;}            
+                if (!selectedimpowerEntity || !selectedCrmEntity) {logsContainer.innerHTML += `<p style="color: red;">❌ Please select both impower and CRM entities.</p>`;autoScrollLogs();return;}            
                 if (!selectedFields || selectedFields.length === 0) {logsContainer.innerHTML += `<p style="color: red;">❌ Please select at least one matched field.</p>`;autoScrollLogs();return;}
                 const nonEmptyFields = selectedFields.filter(field => field && field.trim());
                 if (nonEmptyFields.length === 0) {logsContainer.innerHTML += `<p style="color: red;">❌ Please select at least one valid matched field.</p>`;autoScrollLogs();return;}
                 const payload = {
-                    selectedFaciliooEntity,
+                    selectedimpowerEntity,
                     selectedCrmEntity,
                     matchedFields: nonEmptyFields
                 };
@@ -468,21 +467,21 @@
 
 
             async function fetchAndDisplayMatchingFields() {
-                const selectedFaciliooEntity = $("#entitySelect").val();
+                const selectedimpowerEntity = $("#entitySelect").val();
                 const selectedCrmEntity = $("#entitySelectCRM").val();
                 const logsContainer = document.getElementById("logsContainer");
                 //const migrateEntityBtn = $("#migrateEntityBtn");
                 const matchedFieldsDropdownContainer = document.getElementById("matchedFieldsDropdownContainer");
                 const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
 
-                if (!selectedFaciliooEntity || !selectedCrmEntity) {
+                if (!selectedimpowerEntity || !selectedCrmEntity) {
                     logsContainer.innerHTML = `<strong>Please select both entities to compare.</strong>`;
                     return;
                 }
             
                 try {
                     $("#logsContainer").show();
-                    const response = await fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
+                    const response = await fetch(`/get-matching-fields?selectedimpowerEntity=${selectedimpowerEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
                         method: "GET",
                         headers: { "Authorization": `Bearer ${accessToken}` }
                     });
@@ -495,10 +494,10 @@
                             // Show the dropdown and populate it with matched fields
                             matchedFieldsDropdown.innerHTML = ""; // Clear existing options
                             matchedFields.forEach(match => {
-                                const [faciliooField, crmField] = match.split("-");
+                                const [impowerField, crmField] = match.split("-");
                                 const option = document.createElement("option");
                                 option.value = match;
-                                option.textContent = `${faciliooField} - ${crmField}`;
+                                option.textContent = `${impowerField} - ${crmField}`;
                                 //matchedFieldsDropdown.appendChild(option);
                                 matchedFieldsDropdown.prepend(option);  
                             });
@@ -507,23 +506,23 @@
                             // Display the table with matched fields
                             let tableHTML = `
                                 <strong>Comparing:</strong> 
-                                <br>Facilioo Entity: <b>${selectedFaciliooEntity}</b> 
+                                <br>impower Entity: <b>${selectedimpowerEntity}</b> 
                                 <br>CRM Entity: <b>${selectedCrmEntity}</b>
                                 <hr>
                                 <table border="1" cellspacing="0" cellpadding="5" style="width: 100%; border-collapse: collapse;">
                                     <thead>
                                         <tr style="background-color: #f2f2f2;">
-                                            <th>Facilioo Entity</th>
+                                            <th>impower Entity</th>
                                             <th>CRM Entity</th>
                                         </tr>
                                     </thead>
                                     <tbody>`;
             
                             matchedFields.forEach(match => {
-                                const [faciliooField, crmField] = match.split("-");
+                                const [impowerField, crmField] = match.split("-");
                                 tableHTML += `
                                     <tr>
-                                        <td>${faciliooField}</td>
+                                        <td>${impowerField}</td>
                                         <td>${crmField}</td>
                                     </tr>`;
                             });
@@ -538,7 +537,7 @@
                             matchedFieldsDropdownContainer.style.display = "none"; // Hide the dropdown container
                             logsContainer.innerHTML = `
                                 <strong>Comparing:</strong> 
-                                <br>Facilioo Entity: <b>${selectedFaciliooEntity}</b> 
+                                <br>impower Entity: <b>${selectedimpowerEntity}</b> 
                                 <br>CRM Entity: <b>${selectedCrmEntity}</b>
                                 <hr>
                                 No matching fields found.
@@ -565,32 +564,32 @@
             });
             
             document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
-                const faciliooEntitySelect = document.getElementById("entitySelect");
+                const impowerEntitySelect = document.getElementById("entitySelect");
                 const crmEntitySelect = document.getElementById("entitySelectCRM");
-                const selectedFaciliooEntity = faciliooEntitySelect.value;
+                const selectedimpowerEntity = impowerEntitySelect.value;
                 const selectedCrmEntity = crmEntitySelect.value;
             
-                if (!selectedFaciliooEntity || !selectedCrmEntity) {
-                    alert("Please select both Facilioo and CRM entities.");
+                if (!selectedimpowerEntity || !selectedCrmEntity) {
+                    alert("Please select both impower and CRM entities.");
                     return;
                 }
             
                 const logsContainer = document.getElementById("logsContainer");
-                logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedFaciliooEntity} and ${selectedCrmEntity}...</p>`;
+                logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedimpowerEntity} and ${selectedCrmEntity}...</p>`;
                 autoScrollLogs();
                 logsContainer.style.display = "block";
                 showLoadingSpinner();
             
                 try {
                     // Fetch entity fields and matched fields
-                    const [faciliooResponse, crmResponse, matchedFieldsResponse] = await Promise.all([
-                        fetch(`/fetch-entity-fields?entity_name=${selectedFaciliooEntity}`, {
+                    const [impowerResponse, crmResponse, matchedFieldsResponse] = await Promise.all([
+                        fetch(`/fetch-entity-fields?entity_name=${selectedimpowerEntity}`, {
                             method: "POST",
                             headers: {
                                 "Authorization": `Bearer ${accessToken}`,
                                 "Content-Type": "application/json",
                             },
-                            body: JSON.stringify({ entity_name: selectedFaciliooEntity }),
+                            body: JSON.stringify({ entity_name: selectedimpowerEntity }),
                         }),
                         fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
                             method: "GET",
@@ -599,7 +598,7 @@
                                 "Content-Type": "application/json",
                             },
                         }),
-                        fetch(`/get-matching-fields?selectedFaciliooEntity=${selectedFaciliooEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
+                        fetch(`/get-matching-fields?selectedimpowerEntity=${selectedimpowerEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
                             method: "GET",
                             headers: {
                                 "Authorization": `Bearer ${accessToken}`,
@@ -607,16 +606,16 @@
                         }),
                     ]);
             
-                    if (!faciliooResponse.ok || !crmResponse.ok || !matchedFieldsResponse.ok) {
+                    if (!impowerResponse.ok || !crmResponse.ok || !matchedFieldsResponse.ok) {
                         throw new Error("Failed to fetch entity fields or matched fields.");
                     }
             
-                    const faciliooData = await faciliooResponse.json();
+                    const impowerData = await impowerResponse.json();
                     const crmData = await crmResponse.json();
                     const matchedFieldsData = await matchedFieldsResponse.json();
             
-                    if (faciliooData.success && crmData.success && matchedFieldsData.success) {
-                        const faciliooFields = faciliooData.columns;
+                    if (impowerData.success && crmData.success && matchedFieldsData.success) {
+                        const impowerFields = impowerData.columns;
                         //const crmFields = crmData.columns;
                         const crmFields = crmData.columns.map(column => {
                             if (column.mandatory) {
@@ -636,41 +635,41 @@
                         };
             
                         const matchedFields = [];
-                        const uniqueFaciliooFields = [];
+                        const uniqueimpowerFields = [];
                         const uniqueCrmFields = [];
             
                         // Generate all possible combinations
                         const allCombinations = [];
-                        faciliooFields.forEach(faciliooField => {
+                        impowerFields.forEach(impowerField => {
                             crmFields.forEach(crmField => {
                                 allCombinations.push({
-                                    faciliooField,
+                                    impowerField,
                                     crmField,
-                                    isExactMatch: faciliooField.toLowerCase() === crmField.toLowerCase(),
+                                    isExactMatch: impowerField.toLowerCase() === crmField.toLowerCase(),
                                 });
                             });
                         });
             
-                        faciliooFields.forEach(faciliooField => {
+                        impowerFields.forEach(impowerField => {
                             let isMatched = false;
                             crmFields.forEach(crmField => {
-                                if (faciliooField.toLowerCase() === crmField.toLowerCase()) {
-                                    matchedFields.push({ faciliooField, crmField, isExactMatch: true });
+                                if (impowerField.toLowerCase() === crmField.toLowerCase()) {
+                                    matchedFields.push({ impowerField, crmField, isExactMatch: true });
                                     isMatched = true;
-                                } else if (isEntirelyPartOf(faciliooField, crmField)) {
-                                    matchedFields.push({ faciliooField, crmField, isExactMatch: false });
+                                } else if (isEntirelyPartOf(impowerField, crmField)) {
+                                    matchedFields.push({ impowerField, crmField, isExactMatch: false });
                                     isMatched = true;
                                 }
                             });
                             if (!isMatched) {
-                                uniqueFaciliooFields.push(faciliooField);
+                                uniqueimpowerFields.push(impowerField);
                             }
                         });
             
                         crmFields.forEach(crmField => {
-                            if (!faciliooFields.some(faciliooField =>
-                                faciliooField.toLowerCase() === crmField.toLowerCase() ||
-                                isEntirelyPartOf(faciliooField, crmField))
+                            if (!impowerFields.some(impowerField =>
+                                impowerField.toLowerCase() === crmField.toLowerCase() ||
+                                isEntirelyPartOf(impowerField, crmField))
                             ) {
                                 uniqueCrmFields.push(crmField);
                             }
@@ -678,19 +677,19 @@
                         let tableHtml = `
                         <table style="width: 100%; border-collapse: collapse; table-layout: auto; font-size: 12px; line-height: 1.2; word-wrap: break-word;">
                             <tr>
-                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Facilioo Fields</th>
+                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">impower Fields</th>
                                 <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
                                 <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
                             </tr>
                     `;
                     
                     // Example rows (replace with your actual data)
-                    const maxLength = Math.max(uniqueFaciliooFields.length, uniqueCrmFields.length, matchedFields.length);
+                    const maxLength = Math.max(uniqueimpowerFields.length, uniqueCrmFields.length, matchedFields.length);
                     for (let i = 0; i < maxLength; i++) {
                         tableHtml += `
                             <tr>
                                 <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
-                                    ${uniqueFaciliooFields[i] ? `<span style="color: magenta;">✘ ${uniqueFaciliooFields[i]}</span>` : ''}
+                                    ${uniqueimpowerFields[i] ? `<span style="color: magenta;">✘ ${uniqueimpowerFields[i]}</span>` : ''}
                                 </td>
                                 <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
                                     ${uniqueCrmFields[i] ? `<span style="color: blue;">✘ ${uniqueCrmFields[i]}</span>` : ''}
@@ -698,8 +697,8 @@
                                 <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
                                     ${matchedFields[i] ? 
                                         (matchedFields[i].isExactMatch ? 
-                                            `<span style="color: green; font-weight: bold;">✔ ${matchedFields[i].faciliooField}</span>` : 
-                                            `<span style="color: magenta;">${matchedFields[i].faciliooField}</span> - <span style="color: blue;">${matchedFields[i].crmField}</span>`) : 
+                                            `<span style="color: green; font-weight: bold;">✔ ${matchedFields[i].impowerField}</span>` : 
+                                            `<span style="color: magenta;">${matchedFields[i].impowerField}</span> - <span style="color: blue;">${matchedFields[i].crmField}</span>`) : 
                                         ''}
                                 </td>
                             </tr>
@@ -718,11 +717,11 @@
             
                         allCombinations.forEach(combination => {
                             const option = document.createElement("option");
-                            option.value = `${combination.faciliooField}-${combination.crmField}`;
+                            option.value = `${combination.impowerField}-${combination.crmField}`;
                             option.textContent = combination.isExactMatch ?
-                                `✔ ${combination.faciliooField}` :
-                                `${combination.faciliooField} - ${combination.crmField}`;
-                            if (existingMatchedFields.includes(`${combination.faciliooField}-${combination.crmField}`)) {
+                                `✔ ${combination.impowerField}` :
+                                `${combination.impowerField} - ${combination.crmField}`;
+                            if (existingMatchedFields.includes(`${combination.impowerField}-${combination.crmField}`)) {
                                 option.selected = true;
                             }
                             matchedFieldsDropdown.prepend(option);
@@ -753,7 +752,7 @@
 
     function updatePairDashboard(pair, metrics) {
         // Update current pair dashboard
-        document.getElementById('currentPairNames').textContent = `${pair.facilio} → ${pair.crm}`;
+        document.getElementById('currentPairNames').textContent = `${pair.impower} → ${pair.crm}`;
         document.getElementById('currentPairRecords').textContent = metrics.totalRecords;
         document.getElementById('currentPairSuccess').textContent = `${metrics.successRate}%`;
         document.getElementById('currentPairSpeed').textContent = `${metrics.velocity}/s`;
@@ -774,7 +773,7 @@
         pairElement.className = 'completed-pair-item';
         pairElement.innerHTML = `
             <div class="completed-pair-header">
-                <span>${pair.facilio} → ${pair.crm}</span>
+                <span>${pair.impower} → ${pair.crm}</span>
                 <span class="text-xs">${metrics.duration}s</span>
             </div>
             <div class="completed-pair-metrics">
@@ -891,10 +890,10 @@ function checkMigrationReady() {
         migrateBtn.disabled = false;
     } else {
         // For non-sequence migration, check if both entities are selected
-        const facilioEntity = $("#entitySelect").val();
+        const impowerEntity = $("#entitySelect").val();
         const crmEntity = $("#entitySelectCRM").val();
         
-        if (facilioEntity && crmEntity) {
+        if (impowerEntity && crmEntity) {
             migrateBtn.classList.add("active");
             migrateBtn.disabled = false;
         } else {
@@ -970,7 +969,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 const separator = pair.includes('-') ? '-' : ' ';
                 const parts = pair.split(separator);
                 return {
-                    facilio: parts[0].trim(),
+                    impower: parts[0].trim(),
                     crm: parts[1] ? parts[1].trim() : parts[0].trim()
                 };
             });
@@ -985,15 +984,15 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
             document.getElementById("sequenceProgressBar").style.width = "0%";
             document.getElementById("sequenceProgressText").textContent = `0/${entityPairs.length}`;
         } else {
-            const selectedFaciliooEntity = $("#entitySelect").val();
+            const selectedimpowerEntity = $("#entitySelect").val();
             const selectedCrmEntity = $("#entitySelectCRM").val();
             
-            if (!selectedFaciliooEntity || !selectedCrmEntity) {
+            if (!selectedimpowerEntity || !selectedCrmEntity) {
                 throw new Error("Please select both source and target entities");
             }
 
             entityPairs = [{
-                facilio: selectedFaciliooEntity,
+                impower: selectedimpowerEntity,
                 crm: selectedCrmEntity
             }];
         }
@@ -1009,14 +1008,14 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
 
         // Process each entity pair
         for (const [index, pair] of entityPairs.entries()) {
-            const { facilio, crm } = pair;
+            const { impower, crm } = pair;
             const pairNumber = isSequenceMigration ? ` (${index + 1}/${entityPairs.length})` : '';
             const pairStartTime = Date.now();
 
             logsContainer.innerHTML += `
                 <div class="pair-header">
                     <i class="fas fa-arrow-right"></i> Starting migration${pairNumber}: 
-                    <b>${facilio}</b> → <b>${crm}</b>
+                    <b>${impower}</b> → <b>${crm}</b>
                 </div>
             `;
             autoScrollLogs();
@@ -1032,7 +1031,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 autoScrollLogs();
                 
                 const matchedFieldsResponse = await fetch(
-                    `/get-matching-fields?selectedFaciliooEntity=${encodeURIComponent(facilio)}&selectedCrmEntity=${encodeURIComponent(crm)}`, 
+                    `/get-matching-fields?selectedimpowerEntity=${encodeURIComponent(impower)}&selectedCrmEntity=${encodeURIComponent(crm)}`, 
                     {
                         method: "GET",
                         headers: {"Authorization": `Bearer ${localStorage.getItem('authToken')}`}
@@ -1088,11 +1087,11 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 autoScrollLogs();
 
                 // Fetch source entity data
-                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for <b>${facilio}</b>...</p>`;
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for <b>${impower}</b>...</p>`;
                 autoScrollLogs();
                 
                 const entityDataResponse = await fetch(
-                    `/get-entity-data?entity_name=${encodeURIComponent(facilio)}`, 
+                    `/get-entity-data?entity_name=${encodeURIComponent(impower)}`, 
                     {
                         method: "GET",
                         headers: {"Authorization": `Bearer ${localStorage.getItem('authToken')}`}
@@ -1120,7 +1119,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                         "Authorization": `Bearer ${localStorage.getItem('authToken')}`
                     },
                     body: JSON.stringify({
-                        selected_facilioo_entity: facilio,
+                        selected_impower_entity: impower,
                         selected_crm_entity: crm,
                         limit_records: limitRecords ? 10 : null
                     }),
@@ -1203,14 +1202,14 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 completedPair.innerHTML = `
                     <div class="completed-pair-header">
                         <div class="flex items-center justify-between w-full">
-                            <span class="font-medium">${facilio} → ${crm}</span>
+                            <span class="font-medium">${impower} → ${crm}</span>
                             <div class="flex items-center space-x-3">
                                 <span class="text-sm">${pairDuration}s</span>
                                 <div class="flex space-x-2">
                                     ${data.excel_file_url ? `
                                     <a href="${data.excel_file_url}" 
                                        class="excel-download-btn text-xs bg-green-100 hover:bg-green-200 text-green-800 px-2 py-1 rounded flex items-center transition-colors"
-                                       download="${facilio}_to_${crm}_migration.xlsx">
+                                       download="${impower}_to_${crm}_migration.xlsx">
                                         <i class="fas fa-file-excel mr-1"></i> Excel
                                     </a>
                                     ` : ''}
@@ -1382,16 +1381,15 @@ function autoScrollLogs() {
 
 
 
-
-        
-
-        document.getElementById("authenticateBtn").addEventListener("click", async () => {
-            const email = document.getElementById("email").value;
-            const password = document.getElementById("password").value;
-            if (!email || !password) {
-                alert("Please enter both email and password.");
+        document.getElementById("authForm").addEventListener("submit", async (e) => {
+            e.preventDefault(); // Prevent default form submission
+            
+            const apiKey = document.getElementById("apiKey").value;
+            if (!apiKey) {
+                alert("Please enter your API key.");
                 return;
             }
+            
             showLoadingSpinner();
             try {
                 const response = await fetch("/authenticate", {
@@ -1399,16 +1397,18 @@ function autoScrollLogs() {
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ email, password }),
+                    body: JSON.stringify({ api_key: apiKey }),
                 });
-
+        
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(errorData.message || "Authentication failed.");
+                    throw new Error(errorData.message || "Connection failed.");
                 }
-
+        
                 const data = await response.json();
                 accessToken = data.access_token; // Store token globally
+                console.log('access_token - ', accessToken)
+                // Hide auth form and show migration interface
                 document.getElementById("authForm").style.display = "none";
                 document.getElementById("migrationSection").style.display = "block";
                 document.getElementById("matchControls").style.display = "block";
@@ -1417,15 +1417,66 @@ function autoScrollLogs() {
                 document.getElementById("entityControls").style.display = "flex";
                 document.getElementById("matchingControls").style.display = "block";
                 document.getElementById("progressContainer").style.display = "none";
-
+        
                 await fetchAndPopulateCrmEntities();
                 await populateEntityDropdown();
-
+        
             } catch (error) {
-                console.error("Error during authentication:", error);
-                alert(`Authentication failed: ${error.message}`);
-            } finally {hideLoadingSpinner();}
+                console.error("Error during connection:", error);
+                alert(`Connection failed: ${error.message}`);
+            } finally {
+                hideLoadingSpinner();
+            }
         });
+        
+
+        document.getElementById("authenticateBtn").addEventListener("click", async () => {
+            const apiKey = document.getElementById("apiKey").value;
+            if (!apiKey) {
+                alert("Please enter your API key.");
+                return;
+            }
+            
+            showLoadingSpinner();
+            try {
+                const response = await fetch("/authenticate", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ api_key: apiKey }),
+                });
+        
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || "Connection failed.");
+                }
+        
+                const data = await response.json();
+                accessToken = data.access_token; // Store token globally
+                
+                // Hide auth form and show migration interface
+                document.getElementById("authForm").style.display = "none";
+                document.getElementById("migrationSection").style.display = "block";
+                document.getElementById("matchControls").style.display = "block";
+                document.getElementById("progressContainer").style.display = "block";
+                document.getElementById("logsSection").style.display = "block";
+                document.getElementById("entityControls").style.display = "flex";
+                document.getElementById("matchingControls").style.display = "block";
+                document.getElementById("progressContainer").style.display = "none";
+        
+                await fetchAndPopulateCrmEntities();
+                await populateEntityDropdown();
+        
+            } catch (error) {
+                console.error("Error during connection:", error);
+                alert(`Connection failed: ${error.message}`);
+            } finally {
+                hideLoadingSpinner();
+            }
+        });
+        
+        
         async function fetchAndPopulateCrmEntities() {
             try {
                 // Fetch CRM entities from the backend
@@ -1501,7 +1552,7 @@ function autoScrollLogs() {
         
     async function populateEntityDropdown() {
             try {
-                const response = await fetch("/get-facilioo-entities-with-status", {
+                const response = await fetch("/get-impower-entities-with-status", {
                     method: "GET",
                     headers: {
                         "Authorization": `Bearer ${accessToken}`,
@@ -1511,7 +1562,7 @@ function autoScrollLogs() {
                 if (!response.ok) {throw new Error("Failed to fetch entities list");}
                 const entities = await response.json();
                 const entitySelect = document.getElementById("entitySelect");
-                entitySelect.innerHTML = '<option value="">-- Select a Facilioo Entity --</option>';
+                entitySelect.innerHTML = '<option value="">-- Select a impower Entity --</option>';
                 entities.forEach(entity => {
                     const option = document.createElement("option");
                     option.value = entity.entity_name;
@@ -1523,13 +1574,13 @@ function autoScrollLogs() {
 
             } catch (error) {
                 console.error("Error fetching entities list:", error);
-                alert("Failed to fetch Facilioo entities. Please try again.");
+                alert("Failed to fetch impower entities. Please try again.");
             }
         }
         
         async function fetchEntitiesList() {
             try {
-                const response = await fetch("/facilioo-entities");
+                const response = await fetch("/impower-entities");
                 if (!response.ok) {throw new Error("Failed to fetch entities list");}
                 const entities = await response.json();
                 return entities;
@@ -1606,99 +1657,109 @@ function autoScrollLogs() {
                 const data = await response.json();return data;
             } catch (error) {console.error("Error fetching entity data:", error);throw error;}
         }
-            // Event listener for the "Fetch Entity Data" button
-            document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
-                const entitySelect = document.getElementById("entitySelect");
-                const selectedEntity = entitySelect.value;
-                const logsContainer = document.getElementById("logsContainer");
 
-                if (!selectedEntity) {
-                    alert("Please select an entity.");
-                    return;
+
+document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
+    const entitySelect = document.getElementById("entitySelect");
+    const selectedEntity = entitySelect.value;
+    const logsContainer = document.getElementById("logsContainer");
+
+    if (!selectedEntity) {
+        alert("Please select an entity.");
+        return;
+    }
+
+    showLoadingSpinner();
+    logsContainer.innerHTML = "";
+    logsContainer.style.display = "block";
+    logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting data processing for ${selectedEntity}...</p>`;
+    autoScrollLogs();
+
+    try {
+        // Initialize progress tracking
+        document.getElementById("fetchingMessage").textContent = `Processing ${selectedEntity}...`;
+        document.getElementById("fetchingProgress").style.width = "0%";
+
+        // Start progress monitoring via EventSource
+        const eventSource = new EventSource(`/stream-progress?entity_name=${selectedEntity}`);
+        
+        eventSource.onmessage = function(event) {
+            const progressData = JSON.parse(event.data);
+            
+            if (progressData.status === 'progress') {
+                // Update progress bar
+                const progress = parseInt(progressData.percentage);
+                document.getElementById("fetchingProgress").style.width = `${progress}%`;
+                document.getElementById("fetchingMessage").textContent = `Processing ${selectedEntity}... ${progress}%`;
+                
+                // Update logs with progress details
+                if (progressData.message) {
+                    logsContainer.innerHTML += `<p><i class="fas fa-sync-alt fa-spin"></i> ${progressData.message}</p>`;
+                    autoScrollLogs();
                 }
-                showLoadingSpinner();
-                logsContainer.innerHTML = "";
-                logsContainer.style.display = "block";
-                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for entity: ${selectedEntity}...</p>`;
+            }
+            else if (progressData.status === 'complete') {
+                // Final completion
+                eventSource.close();
+                document.getElementById("fetchingProgress").style.width = "100%";
+                document.getElementById("fetchingMessage").textContent = `Completed processing ${selectedEntity}`;
+                
+                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> ${progressData.message || 'Processing completed successfully'}</p>`;
                 autoScrollLogs();
-                try {
-                    // Real-time progress tracking for fetching data
-                    document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}...`;
+                
+                // Update total rows count
+                fetchTotalRows(selectedEntity);
+                
+                // Reset progress after delay
+                setTimeout(() => {
                     document.getElementById("fetchingProgress").style.width = "0%";
-                    const eventSource = new EventSource(`/stream-progress?entity_name=${selectedEntity}`);
-                    eventSource.onmessage = function (event) {
-                        const progress = parseInt(event.data);
-                        document.getElementById("fetchingProgress").style.width = `${progress}%`;
-                        document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}... ${progress}%`;
-                        if (progress === 100) {
-                            eventSource.close();
-                            logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Data fetched successfully for ${selectedEntity}.</p>`;
-                            autoScrollLogs();
-                            fetchTotalRows(selectedEntity);
-                            setTimeout(() => {
-                                document.getElementById("fetchingProgress").style.width = "0%";
-                                document.getElementById("fetchingMessage").textContent = "Not Started";
-                            }, 1000);
-                        }
-                    };
+                    document.getElementById("fetchingMessage").textContent = "Ready";
+                }, 2000);
+            }
+            else if (progressData.status === 'error') {
+                // Handle errors
+                eventSource.close();
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Error: ${progressData.message}</p>`;
+                autoScrollLogs();
+                throw new Error(progressData.message);
+            }
+        };
 
-                    // Step 1: Fetch & save entity data
-                    const fetchResponse = await fetch(`/fetch-and-save-entity?entity_name=${selectedEntity}`, {
-                        method: "POST",
-                        headers: {
-                            "Authorization": `Bearer ${accessToken}`,
-                            "Content-Type": "application/json",
-                        },
-                    });
+        eventSource.onerror = function() {
+            logsContainer.innerHTML += `<p><i class="fas fa-exclamation-triangle"></i> Progress monitoring disconnected</p>`;
+            autoScrollLogs();
+            eventSource.close();
+        };
 
-                    if (!fetchResponse.ok) throw new Error("Failed to fetch entity data");
+        // Initiate the fetch and save process
+        const fetchResponse = await fetch(`/fetch-and-save-entity?entity_name=${selectedEntity}`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+            },
+        });
 
-                    const fetchData = await fetchResponse.json();
-                    if (fetchData.success) {
-                        logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
-                        logsContainer.innerHTML += `<pre>${fetchData.columns.join("\n")}</pre>`;
-                        autoScrollLogs();
-                    } else {
-                        throw new Error(`Failed to fetch and save data for ${selectedEntity}`);
-                    }
+        if (!fetchResponse.ok) {
+            const errorData = await fetchResponse.json();
+            throw new Error(errorData.detail || "Failed to start processing");
+        }
 
-                    // Step 2: Fetch & export entity data (only after fetch-and-save is successful)
-                    logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Exporting data for entity: ${selectedEntity}...</p>`;
-                    autoScrollLogs();
+        // The backend returns 202 Accepted for background processing
+        const responseData = await fetchResponse.json();
+        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> ${responseData.message}</p>`;
+        autoScrollLogs();
 
-                    const exportResponse = await fetch("/fetch-and-export/", {
-                        method: "POST",
-                        headers: {
-                            "Authorization": `Bearer ${accessToken}`,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ entity_name: selectedEntity }),
-                    });
+        // The actual processing continues in the background via EventSource
 
-                    if (!exportResponse.ok) throw new Error("Failed to export entity data");
-
-                    const exportData = await exportResponse.json();
-                    if (exportData.success) {
-                        // Update the Excel download link
-                        if (exportData.excel_file_url) {
-                            const excelLink = document.getElementById("excelLink");
-                            excelLink.href = exportData.excel_file_url;
-                        }
-                        document.getElementById("excelDownload").style.display = "block";
-
-                        autoScrollLogs();
-                    } else {
-                        throw new Error(`Failed to export data for ${selectedEntity}`);
-                    }
-
-                } catch (error) {
-                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Error: ${error.message}</p>`;
-                    autoScrollLogs();
-                } finally {
-                    hideLoadingSpinner();
-                }
-            });
-
+    } catch (error) {
+        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Error: ${error.message}</p>`;
+        autoScrollLogs();
+        console.error("Processing error:", error);
+    } finally {
+        hideLoadingSpinner();
+    }
+});
 
 
             let clickCount = 0;
@@ -1741,7 +1802,7 @@ function autoScrollLogs() {
                     const blob = await downloadResponse.blob();
                     const downloadLink = document.createElement("a");
                     downloadLink.href = URL.createObjectURL(blob);
-                    downloadLink.download = "facilioo_export.xlsx";
+                    downloadLink.download = "impower_export.xlsx";
                     document.body.appendChild(downloadLink);
                     downloadLink.click();
                     document.body.removeChild(downloadLink);
@@ -1749,17 +1810,17 @@ function autoScrollLogs() {
                 } catch (error) {addLog(`Error: ${error.message}`);updateProgress(0);}
             }
             
-            // Function to update facilioo_entities_with_status table
-            async function updateFaciliooEntitiesStatus() {
+            // Function to update impower_entities_with_status table
+            async function updateimpowerEntitiesStatus() {
                 try {
-                    addLog("Updating facilioo_entities_with_status...");updateProgress(10);
-                    const response = await fetch("/facilioo-entities-with-status", {
+                    addLog("Updating impower_entities_with_status...");updateProgress(10);
+                    const response = await fetch("/impower-entities-with-status", {
                         method: "POST",
                         headers: {"Content-Type": "application/json",},
                         body: JSON.stringify({ access_token: accessToken }),
                     });
                     if (!response.ok) {throw new Error("Failed to update entity status.");}
-                    addLog("facilioo_entities_with_status updated successfully.");
+                    addLog("impower_entities_with_status updated successfully.");
                     await populateEntityDropdown();updateProgress(100);
                 } catch (error) {
                     addLog(`Error: ${error.message}`);updateProgress(0);
@@ -1808,7 +1869,7 @@ function autoScrollLogs() {
                 clickCount2++;
                 clickCount3++;
                 addLog(`Heading clicked to download excel file ${clickCount} time(s).`);
-                addLog(`Heading clicked for facilioo entities updated ${clickCount2} time(s).`);
+                addLog(`Heading clicked for impower entities updated ${clickCount2} time(s).`);
                 addLog(`Heading clicked for crm entities updated ${clickCount3} time(s).`);
 
                 if (clickCount === maxClicksForExport) {
@@ -1816,7 +1877,7 @@ function autoScrollLogs() {
                     clickCount = 0;
                 } 
                 else if (clickCount2 === maxClicksForStatusUpdate) {
-                    updateFaciliooEntitiesStatus();
+                    updateimpowerEntitiesStatus();
                     clickCount2 = 0;
                 }
                 else if (clickCount3 === maxClicksForCRMList) {
