@@ -34,6 +34,10 @@ from fastapi.responses import PlainTextResponse, JSONResponse, HTMLResponse
 import xml.etree.ElementTree as ET
 from sqlalchemy import insert
 from fastapi.encoders import jsonable_encoder
+from psycopg2.extras import RealDictCursor
+from psycopg2 import sql
+
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # Load environment variables
@@ -519,7 +523,7 @@ def clean_field_value(value: Any) -> Any:
     # Handle other types
     return value
 
-    
+
 def parse_xml_to_records(root: ET.Element) -> List[Dict]:
     """Convert XML structure to normalized records"""
     records = []
@@ -1078,65 +1082,86 @@ def fetch_and_export_entity_data(
     except Exception as e:
         logger.error(f"Failed to export data to Excel: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
-
+    
 @app.get("/fetch-entity-fields")
 async def get_entity_fields(
     entity_name: str,
-    authorization: str = Header(None),
     page: int = 1,
     size: int = 1
 ):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    access_token = authorization.split("Bearer ")[1]
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json"
-    }
-
-    params = {"page": page, "size": size}
     
     try:
-        response = requests.get(
-            f"{API_URL}/{entity_name}",
-            headers=headers,
-            params=params
+        # Connect to the staging database
+        conn = psycopg2.connect(
+            host=HOST,
+            database=DBNAME,
+            user=USER,
+            password=PASSWORD,
+            port=PORT
         )
         
-        if response.status_code == 200:
-            data = response.json()
-            content = data.get("content", data.get("items", []))
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Get table name (sanitize to prevent SQL injection)
+            table_name = entity_name.lower().replace("-", "_")
             
-            if not content:
+            # 1. First check if table exists
+            cursor.execute(
+                sql.SQL("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)"),
+                [table_name]
+            )
+            table_exists = cursor.fetchone()['exists']
+            
+            if not table_exists:
                 return JSONResponse(
                     status_code=404,
-                    content={"success": False, "message": "No data found", "columns": []}
+                    content={"success": False, "message": f"Table {table_name} not found", "columns": []}
                 )
             
-            sample_record = content[0]
-            if isinstance(sample_record, dict) and len(sample_record) == 1:
-                sample_record = next(iter(sample_record.values()))
+            # 2. Get column information
+            cursor.execute(
+                sql.SQL("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = %s
+                    ORDER BY ordinal_position
+                """), 
+                [table_name]
+            )
+            columns = [row['column_name'] for row in cursor.fetchall()]
             
-            columns = list(sample_record.keys()) if isinstance(sample_record, dict) else []
+            if not columns:
+                return JSONResponse(
+                    status_code=404,
+                    content={"success": False, "message": f"No columns found in table {table_name}", "columns": []}
+                )
+            
+            # 3. Get sample data (first row)
+            cursor.execute(
+                sql.SQL("SELECT * FROM {} LIMIT 1").format(
+                    sql.Identifier(table_name)
+                )
+            )
+            sample_record = cursor.fetchone()
             
             return {
                 "success": True,
-                "columns": [col.lower() for col in columns],
+                "columns": columns,
                 "sample_record": sample_record
             }
             
+    except psycopg2.Error as e:
         raise HTTPException(
-            status_code=response.status_code,
-            detail=response.text[:200]
+            status_code=500,
+            detail=f"Database error: {str(e)}"
         )
-        
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=str(e)
-        )    
-
+        )
+    finally:
+        if 'conn' in locals():
+            conn.close()
     
 def fetch_all_entity_data_from_staging(db: Session, entity_name: str) -> list:
     logger.info(f"Fetching all data from staging for entity: {entity_name}")

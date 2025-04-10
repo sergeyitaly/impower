@@ -563,40 +563,72 @@
                 }
             });
             
-// Add this new function to fetch entity fields
-async function fetchEntityFields(entityName, isImpower = true) {
-    const endpoint = isImpower 
-        ? `/fetch-entity-fields?entity_name=${entityName}`
-        : `/crm-entity-fields?entity_name=${entityName}`;
-    
-    try {
-        const response = await fetch(endpoint, {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${accessToken}`,
-                "Accept": "application/json"
+            async function fetchEntityFields(entityName, isImpower = true) {
+                const endpoint = isImpower 
+                    ? `/fetch-entity-fields?entity_name=${encodeURIComponent(entityName)}`
+                    : `/crm-entity-fields?entity_name=${encodeURIComponent(entityName)}`;
+                
+                try {
+                    // Prepare base headers
+                    const headers = {
+                        "Accept": "application/json"
+                    };
+            
+                    // For CRM endpoints, require and validate accessToken
+                    if (!isImpower) {
+                        if (!accessToken) {
+                            throw new Error("Access token is required for CRM fields");
+                        }
+                        headers["Authorization"] = `Bearer ${accessToken}`;
+                    }
+            
+                    const response = await fetch(endpoint, {
+                        method: "GET",
+                        headers: headers
+                    });
+            
+                    // Handle 401 Unauthorized specifically
+                    if (response.status === 401) {
+                        throw new Error("Authentication failed - please refresh your session");
+                    }
+            
+                    if (!response.ok) {
+                        let errorDetail = `Failed to fetch ${isImpower ? 'Impower' : 'CRM'} fields`;
+                        try {
+                            const errorData = await response.json();
+                            errorDetail = errorData.detail || errorData.message || errorDetail;
+                        } catch (e) {
+                            console.error("Error parsing error response:", e);
+                        }
+                        throw new Error(`${errorDetail} (HTTP ${response.status})`);
+                    }
+            
+                    const data = await response.json();
+                    
+                    if (data.success === false) {
+                        throw new Error(data.message || `No fields found for ${entityName}`);
+                    }
+            
+                    return {
+                        columns: data.columns || [],
+                        sampleRecord: data.sample_record || {},
+                        tableName: data.table_name || entityName.toLowerCase().replace("-", "_")
+                    };
+                    
+                } catch (error) {
+                    console.error(`Error fetching ${isImpower ? 'Impower' : 'CRM'} fields:`, error);
+                    
+                    // Transform specific errors for better user messaging
+                    if (error.message.includes("401")) {
+                        throw new Error("Session expired - please log in again");
+                    }
+                    if (error.message.includes("Access token is required")) {
+                        throw new Error("Please authenticate to access CRM data");
+                    }
+                    
+                    throw error;
+                }
             }
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to fetch ${isImpower ? 'Impower' : 'CRM'} fields`);
-        }
-
-        const data = await response.json();
-        
-        if (!data.success) {
-            throw new Error(data.message || `No fields found for ${entityName}`);
-        }
-
-        return {
-            columns: data.columns || [],
-            sampleRecord: data.sample_record || {}
-        };
-    } catch (error) {
-        console.error(`Error fetching ${isImpower ? 'Impower' : 'CRM'} fields:`, error);
-        throw error;
-    }
-}
 
 // Update your matchEntitiesBtn event listener
 document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
