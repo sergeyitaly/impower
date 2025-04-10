@@ -372,163 +372,163 @@ def insert_entity_data(table_name: str, records: List[Dict]) -> int:
             
 @app.post("/fetch-and-save-entity")
 async def fetch_and_save_entity(
-    entity_name: str, 
-    background_tasks: BackgroundTasks, 
+    entity_name: str,
+    background_tasks: BackgroundTasks,
     authorization: Optional[str] = Header(None),
     page: int = 0,
     size: int = 30
 ):
-    """Fetch entity data from impower API and handle both JSON and XML responses"""
+    """Universal entity fetcher that handles both JSON and XML"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     access_token = authorization.split("Bearer ")[1]
+    headers = {"Authorization": f"Bearer {access_token}"}
+    params = {"size": size, "page": page}
+    url = f"{API_URL}/{entity_name}"
 
     try:
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json, application/xml"
-        }
-
-        params = {"size": size, "page": page}
-        url = f"{API_URL}/{entity_name}"
-        
         response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
         
-        # Handle XML responses (SEPA/CAMT)
-        if 'application/xml' in response.headers.get('Content-Type', ''):
+        content_type = response.headers.get('Content-Type', '')
+        
+        # XML Handling
+        if 'application/xml' in content_type or 'text/xml' in content_type:
             try:
-                ET.fromstring(response.text)  # Validate XML
-                return PlainTextResponse(
-                    content=response.text,
-                    media_type="application/xml",
-                    headers={"X-Entity-Type": "xml-document"}
-                )
+                root = ET.fromstring(response.text)
+                records = parse_xml_to_records(root)
+                return await handle_records(entity_name, records, page, size, len(records))
             except ET.ParseError as e:
-                logger.error(f"Invalid XML received: {str(e)}")
-                raise HTTPException(
-                    status_code=422,
-                    detail="Received malformed XML document"
-                )
+                logger.error(f"XML parsing failed: {str(e)}")
+                raise HTTPException(status_code=422, detail="Invalid XML format")
         
-        # Handle JSON responses
-        if response.status_code != 200:
-            error_detail = {
-                "status_code": response.status_code,
-                "response_text": response.text[:200],
-                "request_url": response.request.url,
-            }
-            logger.error(f"API request failed: {json.dumps(error_detail, indent=2)}")
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"API request failed: {response.text[:200]}"
-            )
-
+        # JSON Handling
         try:
             data = response.json()
         except ValueError:
-            raise HTTPException(
-                status_code=422,
-                detail="Invalid JSON response from API"
-            )
-
-        content = data.get("content", [])
-        if not content:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No data found for entity {entity_name}"
-            )
-
-        records = []
-        seen_ids = set()
-        
-        for item in content:
-            if isinstance(item, dict) and len(item) == 1:
-                record = next(iter(item.values()))
-                if isinstance(record, list):
-                    record = record[0] if record else {}
-            else:
-                record = item
+            raise HTTPException(status_code=422, detail="Invalid JSON response")
             
-            if not isinstance(record, dict):
-                continue
-            if 'id' not in record:
-                logger.warning(f"Record missing ID: {record}")
-                continue
-            if record['id'] in seen_ids:
-                logger.warning(f"Duplicate ID found: {record['id']}")
-                continue
-            seen_ids.add(record['id'])
-            records.append(record)
-
-        if not records:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No valid records found for entity {entity_name}"
-            )
-
-        first_record = records[0]
-        table_name = sanitize_table_name(entity_name)
-        
-        page_info = PageInfo(
-            current_page=page,
-            page_size=size,
-            total_pages=data.get("totalPages", 1),
-            total_elements=data.get("totalElements", len(records))
-        )
-
-        try:
-
-            # Ensure create_table_for_entity returns proper columns
-            created_columns = create_table_for_entity(
-                entity_name=table_name,
-                sample_record=first_record
-            )
+        if isinstance(data, dict):
+            if 'content' in data:  # Paginated response
+                records = normalize_records(data['content'])
+                page_info = {
+                    'current_page': page,
+                    'page_size': size,
+                    'total_pages': data.get('totalPages', 1),
+                    'total_elements': data.get('totalElements', len(records))
+                }
+            else:  # Single object
+                records = [normalize_records(data)]
+                page_info = None
+        elif isinstance(data, list):  # Direct array response
+            records = normalize_records(data)
+            page_info = None
+        else:
+            raise HTTPException(status_code=422, detail="Unrecognized JSON structure")
             
-            # Convert columns to a list if it's not already
-            if not isinstance(created_columns, list):
-                created_columns = list(created_columns) if created_columns else []
+        return await handle_records(entity_name, records, page, size, len(records), page_info)
 
-            inserted_count = insert_entity_data(
-                table_name=table_name,
-                records=records
-            )
-        except Exception as e:
-            logger.error(f"Database error: {str(e)}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=f"Database operation failed: {str(e)}"
-            )
-
-        return JSONResponse(
-            content=EntityResponse(
-                success=True,
-                message=f"Entity {entity_name} processed successfully",
-                data={
-                    "table_name": table_name,
-                    "columns": created_columns or [],
-                    "sample_data": first_record,
-                    "inserted_count": inserted_count
-                },
-                page_info=page_info
-            ).model_dump()  # Use model_dump() instead of dict()
-        )
-
-
-    except HTTPException:
-        raise
     except requests.RequestException as e:
-        logger.error(f"Network error: {str(e)}")
-        raise HTTPException(
-            status_code=503,
-            detail="Service temporarily unavailable"
-        )
+        logger.error(f"Request failed: {str(e)}")
+        raise HTTPException(status_code=502, detail="Upstream service error")
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error"
-        )
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+def normalize_records(records: Union[List[Dict], Dict]) -> List[Dict]:
+    """Normalize records to consistent format"""
+    normalized = []
+    
+    if isinstance(records, dict):
+        records = [records]
+    
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+            
+        # Flatten nested structures
+        normalized_record = {}
+        for key, value in record.items():
+            if isinstance(value, dict):
+                for subkey, subvalue in value.items():
+                    normalized_record[f"{key}_{subkey}"] = subvalue
+            else:
+                normalized_record[key] = value
+                
+        # Standardize field names
+        normalized_record = {k.lower().replace('.', '_'): v 
+                           for k, v in normalized_record.items()}
+        normalized.append(normalized_record)
+    
+    return normalized
+
+def parse_xml_to_records(root: ET.Element) -> List[Dict]:
+    """Convert XML structure to normalized records"""
+    records = []
+    
+    # Handle different XML structures
+    if root.tag.endswith('List'):  # List response
+        for item in root:
+            records.append(xml_element_to_dict(item))
+    elif root.tag.endswith('Response'):  # Wrapped response
+        content = root.find('content')
+        if content is not None:
+            for item in content:
+                records.append(xml_element_to_dict(item))
+    else:  # Single item
+        records.append(xml_element_to_dict(root))
+    
+    return records
+
+def xml_element_to_dict(element: ET.Element) -> Dict[str, Any]:
+    """Convert XML element to dictionary"""
+    result = {}
+    for child in element:
+        if len(child) > 0:  # Has children
+            result[child.tag] = xml_element_to_dict(child)
+        else:
+            result[child.tag] = child.text
+    return result
+
+async def handle_records(
+    entity_name: str,
+    records: List[Dict],
+    page: int,
+    size: int,
+    count: int,
+    page_info: Optional[Dict] = None
+):
+    """Common handling for normalized records"""
+    if not records:
+        raise HTTPException(status_code=404, detail="No records found")
+    
+    table_name = sanitize_table_name(entity_name)
+    first_record = records[0]
+    
+    try:
+        created_columns = create_table_for_entity(table_name, first_record)
+        inserted_count = insert_entity_data(table_name, records)
+        
+        response_data = {
+            "table_name": table_name,
+            "columns": list(created_columns) if created_columns else [],
+            "sample_data": first_record,
+            "inserted_count": inserted_count,
+            "page_info": page_info or {
+                "current_page": page,
+                "page_size": size,
+                "total_pages": (count + size - 1) // size,
+                "total_elements": count
+            }
+        }
+        
+        return JSONResponse(content=jsonable_encoder(response_data))
+    
+    except Exception as e:
+        logger.error(f"Database operation failed: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Database operation failed")
+
 
 
 async def fetch_entity_data(
