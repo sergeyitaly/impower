@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 import logging
 from sqlalchemy.orm import Session
-from typing import Optional, Any
+from typing import Optional, Any, Union
 import httpx
 from urllib.parse import quote
 from fastapi.responses import FileResponse
@@ -33,7 +33,7 @@ import pandas as pd
 from fastapi.responses import PlainTextResponse, JSONResponse, HTMLResponse
 import xml.etree.ElementTree as ET
 from sqlalchemy import insert
-
+from fastapi.encoders import jsonable_encoder
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 # Load environment variables
@@ -437,7 +437,7 @@ async def fetch_and_save_entity(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 def normalize_records(records: Union[List[Dict], Dict]) -> List[Dict]:
-    """Normalize records to consistent format"""
+    """Normalize records to consistent format and flatten nested structures"""
     normalized = []
     
     if isinstance(records, dict):
@@ -447,14 +447,28 @@ def normalize_records(records: Union[List[Dict], Dict]) -> List[Dict]:
         if not isinstance(record, dict):
             continue
             
-        # Flatten nested structures
+        # Flatten nested structures and clean values
         normalized_record = {}
         for key, value in record.items():
             if isinstance(value, dict):
+                # Handle nested dictionaries
                 for subkey, subvalue in value.items():
-                    normalized_record[f"{key}_{subkey}"] = subvalue
+                    clean_value = clean_field_value(subvalue)
+                    normalized_record[f"{key}_{subkey}"] = clean_value
+            elif isinstance(value, str) and value.startswith('{') and value.endswith('}'):
+                # Handle stringified JSON objects
+                try:
+                    nested = json.loads(value)
+                    if isinstance(nested, dict):
+                        for subkey, subvalue in nested.items():
+                            clean_value = clean_field_value(subvalue)
+                            normalized_record[f"{key}_{subkey}"] = clean_value
+                    else:
+                        normalized_record[key] = clean_field_value(value)
+                except json.JSONDecodeError:
+                    normalized_record[key] = clean_field_value(value)
             else:
-                normalized_record[key] = value
+                normalized_record[key] = clean_field_value(value)
                 
         # Standardize field names
         normalized_record = {k.lower().replace('.', '_'): v 
@@ -463,6 +477,49 @@ def normalize_records(records: Union[List[Dict], Dict]) -> List[Dict]:
     
     return normalized
 
+def clean_field_value(value: Any) -> Any:
+    """Clean and normalize a single field value"""
+    if value is None:
+        return None
+        
+    # Handle string values
+    if isinstance(value, str):
+        # Handle JSON-encoded arrays
+        if value.startswith('[') and value.endswith(']'):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    if not parsed:  # Empty list
+                        return None
+                    # Take first element if array is not empty
+                    first_item = parsed[0]
+                    if isinstance(first_item, str):
+                        return first_item.strip()
+                    return str(first_item)
+                return str(parsed)
+            except json.JSONDecodeError:
+                if value.strip() == '[]':
+                    return None
+                return value.strip('[]"\' ')
+        # Regular string - just clean it
+        return value.strip('"\' ')
+    
+    # Handle list values directly (not JSON-encoded)
+    elif isinstance(value, list):
+        if not value:  # Empty list
+            return None
+        # Take first element if list is not empty
+        first_item = value[0]
+        if first_item is None:
+            return None
+        if isinstance(first_item, str):
+            return first_item.strip()
+        return str(first_item)
+    
+    # Handle other types
+    return value
+
+    
 def parse_xml_to_records(root: ET.Element) -> List[Dict]:
     """Convert XML structure to normalized records"""
     records = []
