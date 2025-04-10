@@ -40,7 +40,7 @@
 
     <div class="container mx-auto p-4">
         <h1 id="clickableHeading" class="text-3xl font-bold text-center mb-8 cursor-pointer hover:text-blue-600">
-            Impower.de → Dynamics 365 Migration
+            Impower.de - Dynamics 365 Migration
         </h1>
         <!-- API Key Form -->
         <form id="authForm" class="bg-white p-6 rounded-lg shadow-md max-w-md mx-auto">
@@ -240,7 +240,7 @@
                                 </ol>
                                 <div class="mt-2 text-xs text-blue-700 flex items-start gap-1.5">
                                     <i class="fas fa-lightbulb mt-0.5"></i>
-                                    <span><strong>Tip:</strong> Reference data first (locations → work orders)</span>
+                                    <span><strong>Tip:</strong> Reference data first (locations - work orders)</span>
                                 </div>
                             </div>
                         </div>
@@ -563,186 +563,269 @@
                 }
             });
             
-            document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
-                const impowerEntitySelect = document.getElementById("entitySelect");
-                const crmEntitySelect = document.getElementById("entitySelectCRM");
-                const selectedimpowerEntity = impowerEntitySelect.value;
-                const selectedCrmEntity = crmEntitySelect.value;
-            
-                if (!selectedimpowerEntity || !selectedCrmEntity) {
-                    alert("Please select both impower and CRM entities.");
-                    return;
-                }
-            
-                const logsContainer = document.getElementById("logsContainer");
-                logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedimpowerEntity} and ${selectedCrmEntity}...</p>`;
-                autoScrollLogs();
-                logsContainer.style.display = "block";
-                showLoadingSpinner();
-            
-                try {
-                    // Fetch entity fields and matched fields
-                    const [impowerResponse, crmResponse, matchedFieldsResponse] = await Promise.all([
-                        fetch(`/fetch-entity-fields?entity_name=${selectedimpowerEntity}`, {
-                            method: "POST",
-                            headers: {
-                                "Authorization": `Bearer ${accessToken}`,
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({ entity_name: selectedimpowerEntity }),
-                        }),
-                        fetch(`/crm-entity-fields?entity_name=${selectedCrmEntity}`, {
-                            method: "GET",
-                            headers: {
-                                "Authorization": `Bearer ${accessToken}`,
-                                "Content-Type": "application/json",
-                            },
-                        }),
-                        fetch(`/get-matching-fields?selectedimpowerEntity=${selectedimpowerEntity}&selectedCrmEntity=${selectedCrmEntity}`, {
-                            method: "GET",
-                            headers: {
-                                "Authorization": `Bearer ${accessToken}`,
-                            },
-                        }),
-                    ]);
-            
-                    if (!impowerResponse.ok || !crmResponse.ok || !matchedFieldsResponse.ok) {
-                        throw new Error("Failed to fetch entity fields or matched fields.");
-                    }
-            
-                    const impowerData = await impowerResponse.json();
-                    const crmData = await crmResponse.json();
-                    const matchedFieldsData = await matchedFieldsResponse.json();
-            
-                    if (impowerData.success && crmData.success && matchedFieldsData.success) {
-                        const impowerFields = impowerData.columns;
-                        //const crmFields = crmData.columns;
-                        const crmFields = crmData.columns.map(column => {
-                            if (column.mandatory) {
-                                return `${column.name} *`; // Red color for required fields
-                            } else if (column.upsert) {
-                                return `${column.name} +`; // Green color for upsert fields with a + sign
-                            } else {
-                                return column.name; // Default column without additional symbols
-                            }
-                        });
-                        const existingMatchedFields = matchedFieldsData.matched_fields || [];
-            
-                        const isEntirelyPartOf = (field1, field2) => {
-                            const lowerField1 = field1.toLowerCase();
-                            const lowerField2 = field2.toLowerCase();
-                            return lowerField2.includes(lowerField1) || lowerField1.includes(lowerField2);
-                        };
-            
-                        const matchedFields = [];
-                        const uniqueimpowerFields = [];
-                        const uniqueCrmFields = [];
-            
-                        // Generate all possible combinations
-                        const allCombinations = [];
-                        impowerFields.forEach(impowerField => {
-                            crmFields.forEach(crmField => {
-                                allCombinations.push({
-                                    impowerField,
-                                    crmField,
-                                    isExactMatch: impowerField.toLowerCase() === crmField.toLowerCase(),
-                                });
-                            });
-                        });
-            
-                        impowerFields.forEach(impowerField => {
-                            let isMatched = false;
-                            crmFields.forEach(crmField => {
-                                if (impowerField.toLowerCase() === crmField.toLowerCase()) {
-                                    matchedFields.push({ impowerField, crmField, isExactMatch: true });
-                                    isMatched = true;
-                                } else if (isEntirelyPartOf(impowerField, crmField)) {
-                                    matchedFields.push({ impowerField, crmField, isExactMatch: false });
-                                    isMatched = true;
-                                }
-                            });
-                            if (!isMatched) {
-                                uniqueimpowerFields.push(impowerField);
-                            }
-                        });
-            
-                        crmFields.forEach(crmField => {
-                            if (!impowerFields.some(impowerField =>
-                                impowerField.toLowerCase() === crmField.toLowerCase() ||
-                                isEntirelyPartOf(impowerField, crmField))
-                            ) {
-                                uniqueCrmFields.push(crmField);
-                            }
-                        });
-                        let tableHtml = `
-                        <table style="width: 100%; border-collapse: collapse; table-layout: auto; font-size: 12px; line-height: 1.2; word-wrap: break-word;">
-                            <tr>
-                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">impower Fields</th>
-                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">CRM Fields</th>
-                                <th style="padding: 4px; text-align: left; background-color: #f4f4f4; font-weight: normal;">Matched Fields</th>
-                            </tr>
-                    `;
-                    
-                    // Example rows (replace with your actual data)
-                    const maxLength = Math.max(uniqueimpowerFields.length, uniqueCrmFields.length, matchedFields.length);
-                    for (let i = 0; i < maxLength; i++) {
-                        tableHtml += `
-                            <tr>
-                                <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
-                                    ${uniqueimpowerFields[i] ? `<span style="color: magenta;">✘ ${uniqueimpowerFields[i]}</span>` : ''}
-                                </td>
-                                <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
-                                    ${uniqueCrmFields[i] ? `<span style="color: blue;">✘ ${uniqueCrmFields[i]}</span>` : ''}
-                                </td>
-                                <td style="padding: 4px; border: 1px solid #ddd; word-wrap: break-word;">
-                                    ${matchedFields[i] ? 
-                                        (matchedFields[i].isExactMatch ? 
-                                            `<span style="color: green; font-weight: bold;">✔ ${matchedFields[i].impowerField}</span>` : 
-                                            `<span style="color: magenta;">${matchedFields[i].impowerField}</span> - <span style="color: blue;">${matchedFields[i].crmField}</span>`) : 
-                                        ''}
-                                </td>
-                            </tr>
-                        `;
-                    }
-                    
-                    tableHtml += `</table>`;
-                    
-                    // Append the table to the logsContainer
-                    logsContainer.innerHTML += tableHtml;
-                    autoScrollLogs();
-            
-                        // Populate the dropdown with all possible field pairs
-                        const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
-                        matchedFieldsDropdown.innerHTML = "";
-            
-                        allCombinations.forEach(combination => {
-                            const option = document.createElement("option");
-                            option.value = `${combination.impowerField}-${combination.crmField}`;
-                            option.textContent = combination.isExactMatch ?
-                                `✔ ${combination.impowerField}` :
-                                `${combination.impowerField} - ${combination.crmField}`;
-                            if (existingMatchedFields.includes(`${combination.impowerField}-${combination.crmField}`)) {
-                                option.selected = true;
-                            }
-                            matchedFieldsDropdown.prepend(option);
-                            //matchedFieldsDropdown.appendChild(option);
-                        });
-            
-                        document.getElementById("matchedFieldsDropdownContainer").style.display = matchedFields.length > 0 ? "block" : "none";
-            
-                    } else {
-                        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Failed to fetch entity fields.</p>`;
-                        autoScrollLogs();
-                    }
-                } catch (error) {
-                    console.error("Error:", error);
-                    logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> An error occurred while matching entities.</p>`;
-                    autoScrollLogs();
-                }
-                hideLoadingSpinner();
-            });
-                    
+// Add this new function to fetch entity fields
+async function fetchEntityFields(entityName, isImpower = true) {
+    const endpoint = isImpower 
+        ? `/fetch-entity-fields?entity_name=${entityName}`
+        : `/crm-entity-fields?entity_name=${entityName}`;
+    
+    try {
+        const response = await fetch(endpoint, {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${accessToken}`,
+                "Accept": "application/json"
+            }
+        });
 
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ${isImpower ? 'Impower' : 'CRM'} fields`);
+        }
+
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.message || `No fields found for ${entityName}`);
+        }
+
+        return {
+            columns: data.columns || [],
+            sampleRecord: data.sample_record || {}
+        };
+    } catch (error) {
+        console.error(`Error fetching ${isImpower ? 'Impower' : 'CRM'} fields:`, error);
+        throw error;
+    }
+}
+
+// Update your matchEntitiesBtn event listener
+document.getElementById("matchEntitiesBtn").addEventListener("click", async () => {
+    const impowerEntitySelect = document.getElementById("entitySelect");
+    const crmEntitySelect = document.getElementById("entitySelectCRM");
+    const selectedImpowerEntity = impowerEntitySelect.value;
+    const selectedCrmEntity = crmEntitySelect.value;
+
+    if (!selectedImpowerEntity || !selectedCrmEntity) {
+        alert("Please select both Impower and CRM entities.");
+        return;
+    }
+
+    const logsContainer = document.getElementById("logsContainer");
+    logsContainer.innerHTML = `<p><i class="fas fa-info-circle"></i> Matching entities: ${selectedImpowerEntity} and ${selectedCrmEntity}...</p>`;
+    autoScrollLogs();
+    logsContainer.style.display = "block";
+    showLoadingSpinner();
+
+    try {
+        // Fetch all data in parallel
+                const [
+                impowerFieldsData, 
+                crmFieldsData, 
+                matchedFieldsData
+            ] = await Promise.all([
+                fetchEntityFields(selectedImpowerEntity, true),
+                fetchEntityFields(selectedCrmEntity, false),
+                fetch(`/get-matching-fields?selectedimpowerEntity=${encodeURIComponent(selectedImpowerEntity)}&selectedCrmEntity=${encodeURIComponent(selectedCrmEntity)}`, {
+                    method: "GET",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Accept": "application/json"
+                    }
+                }).then(async res => {
+                    if (!res.ok) {
+                        const error = await res.json();
+                        throw new Error(error.detail || "Failed to fetch matched fields");
+                    }
+                    return res.json();
+                })
+            ]);
+
+        // Process CRM fields with indicators for mandatory/upsert fields
+        const crmFields = crmFieldsData.columns.map(column => {
+            if (typeof column === 'string') return column;
+            
+            // Handle object-style CRM fields
+            let displayName = column.name || column.fieldName || '';
+            if (column.mandatory) {
+                return `${displayName} *`; // Red color for required fields
+            } else if (column.upsert) {
+                return `${displayName} +`; // Green color for upsert fields
+            }
+            return displayName;
+        });
+
+        const impowerFields = impowerFieldsData.columns;
+        const existingMatchedFields = matchedFieldsData.matched_fields || [];
+
+        // Field matching logic
+        const isEntirelyPartOf = (field1, field2) => {
+            const cleanField1 = field1.replace(/[*+]$/, '').trim().toLowerCase();
+            const cleanField2 = field2.replace(/[*+]$/, '').trim().toLowerCase();
+            return cleanField2.includes(cleanField1) || cleanField1.includes(cleanField2);
+        };
+
+        const matchedFields = [];
+        const uniqueImpowerFields = [];
+        const uniqueCrmFields = [];
+
+        // Generate all possible combinations for dropdown
+        const allCombinations = [];
+        impowerFields.forEach(impowerField => {
+            crmFields.forEach(crmField => {
+                const cleanImpower = impowerField.toLowerCase();
+                const cleanCrm = crmField.replace(/[*+]$/, '').trim().toLowerCase();
+                
+                allCombinations.push({
+                    impowerField,
+                    crmField,
+                    isExactMatch: cleanImpower === cleanCrm,
+                    isPartialMatch: isEntirelyPartOf(impowerField, crmField)
+                });
+            });
+        });
+
+        // Find matches and unique fields
+        impowerFields.forEach(impowerField => {
+            let isMatched = false;
+            crmFields.forEach(crmField => {
+                const cleanImpower = impowerField.toLowerCase();
+                const cleanCrm = crmField.replace(/[*+]$/, '').trim().toLowerCase();
+                
+                if (cleanImpower === cleanCrm) {
+                    matchedFields.push({ 
+                        impowerField, 
+                        crmField, 
+                        isExactMatch: true 
+                    });
+                    isMatched = true;
+                } else if (isEntirelyPartOf(impowerField, crmField)) {
+                    matchedFields.push({ 
+                        impowerField, 
+                        crmField, 
+                        isExactMatch: false 
+                    });
+                    isMatched = true;
+                }
+            });
+            
+            if (!isMatched) {
+                uniqueImpowerFields.push(impowerField);
+            }
+        });
+
+        crmFields.forEach(crmField => {
+            if (!impowerFields.some(impowerField => 
+                impowerField.toLowerCase() === crmField.replace(/[*+]$/, '').trim().toLowerCase() ||
+                isEntirelyPartOf(impowerField, crmField))
+            ) {
+                uniqueCrmFields.push(crmField);
+            }
+        });
+
+        // Generate the comparison table
+        let tableHtml = `
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px;">
+                    <thead>
+                        <tr style="background-color: #f8f9fa;">
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">Impower Fields</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">CRM Fields</th>
+                            <th style="padding: 8px; border: 1px solid #dee2e6; text-align: left;">Matched Fields</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        const maxRows = Math.max(
+            uniqueImpowerFields.length, 
+            uniqueCrmFields.length, 
+            matchedFields.length
+        );
+
+        for (let i = 0; i < maxRows; i++) {
+            const impowerField = uniqueImpowerFields[i];
+            const crmField = uniqueCrmFields[i];
+            const matchedField = matchedFields[i];
+
+            tableHtml += `
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #dee2e6;">
+                        ${impowerField ? `<span style="color: #e83e8c;">✘ ${impowerField}</span>` : ''}
+                    </td>
+                    <td style="padding: 8px; border: 1px solid #dee2e6;">
+                        ${crmField ? `<span style="color: #007bff;">✘ ${crmField}</span>` : ''}
+                    </td>
+                    <td style="padding: 8px; border: 1px solid #dee2e6;">
+                        ${matchedField ? 
+                            (matchedField.isExactMatch ? 
+                                `<span style="color: #28a745; font-weight: bold;">✔ ${matchedField.impowerField}</span>` : 
+                                `<span style="color: #e83e8c;">${matchedField.impowerField}</span> - <span style="color: #007bff;">${matchedField.crmField}</span>`) : 
+                            ''}
+                    </td>
+                </tr>
+            `;
+        }
+
+        tableHtml += `
+                    </tbody>
+                </table>
+            </div>
+            <p style="margin-top: 10px; font-size: 12px; color: #6c757d;">
+                <span style="color: #28a745;">✔</span> = Exact match | 
+                <span style="color: #e83e8c;">-</span> = Partial match | 
+                <span style="color: #e83e8c;">✘</span> = Unmatched Impower field | 
+                <span style="color: #007bff;">✘</span> = Unmatched CRM field |
+                <span style="color: #dc3545;">*</span> = Required CRM field |
+                <span style="color: #20c997;">+</span> = Upsert CRM field
+            </p>
+        `;
+
+        logsContainer.innerHTML += tableHtml;
+        autoScrollLogs();
+
+        // Populate the dropdown with field mapping options
+        const matchedFieldsDropdown = document.getElementById("matchedFieldsDropdown");
+        matchedFieldsDropdown.innerHTML = '<option value="">-- Select field mapping --</option>';
+
+        allCombinations.forEach(combination => {
+            const option = document.createElement("option");
+            const value = `${combination.impowerField}-${combination.crmField.replace(/[*+]$/, '').trim()}`;
+            option.value = value;
+            
+            let displayText = combination.isExactMatch
+            ? `✔ ${combination.impowerField} - ${combination.impowerField}`
+            : `${combination.impowerField} - ${combination.crmField}`;
+        
+            if (combination.crmField.endsWith('*')) {
+                displayText += '';
+            } else if (combination.crmField.endsWith('+')) {
+                displayText += '';
+            }
+            
+            option.textContent = displayText;
+            
+            if (existingMatchedFields.includes(`${combination.faciliooField}-${combination.crmField}`)) {
+                option.selected = true;
+            }
+            
+            matchedFieldsDropdown.appendChild(option);
+        });
+
+        document.getElementById("matchedFieldsDropdownContainer").style.display = 
+            allCombinations.length > 0 ? "block" : "none";
+
+    } catch (error) {
+        console.error("Error matching entities:", error);
+        logsContainer.innerHTML += `
+            <p style="color: #dc3545;">
+                <i class="fas fa-times-circle"></i> Error: ${error.message}
+            </p>
+        `;
+        autoScrollLogs();
+    } finally {
+        hideLoadingSpinner();
+    }
+});
 
 
 // do not delete });               
@@ -752,7 +835,7 @@
 
     function updatePairDashboard(pair, metrics) {
         // Update current pair dashboard
-        document.getElementById('currentPairNames').textContent = `${pair.impower} → ${pair.crm}`;
+        document.getElementById('currentPairNames').textContent = `${pair.impower} - ${pair.crm}`;
         document.getElementById('currentPairRecords').textContent = metrics.totalRecords;
         document.getElementById('currentPairSuccess').textContent = `${metrics.successRate}%`;
         document.getElementById('currentPairSpeed').textContent = `${metrics.velocity}/s`;
@@ -773,7 +856,7 @@
         pairElement.className = 'completed-pair-item';
         pairElement.innerHTML = `
             <div class="completed-pair-header">
-                <span>${pair.impower} → ${pair.crm}</span>
+                <span>${pair.impower} - ${pair.crm}</span>
                 <span class="text-xs">${metrics.duration}s</span>
             </div>
             <div class="completed-pair-metrics">
@@ -1015,7 +1098,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
             logsContainer.innerHTML += `
                 <div class="pair-header">
                     <i class="fas fa-arrow-right"></i> Starting migration${pairNumber}: 
-                    <b>${impower}</b> → <b>${crm}</b>
+                    <b>${impower}</b> - <b>${crm}</b>
                 </div>
             `;
             autoScrollLogs();
@@ -1202,7 +1285,7 @@ document.getElementById("migrateEntityBtn").addEventListener("click", async () =
                 completedPair.innerHTML = `
                     <div class="completed-pair-header">
                         <div class="flex items-center justify-between w-full">
-                            <span class="font-medium">${impower} → ${crm}</span>
+                            <span class="font-medium">${impower} - ${crm}</span>
                             <div class="flex items-center space-x-3">
                                 <span class="text-sm">${pairDuration}s</span>
                                 <div class="flex space-x-2">
@@ -1658,110 +1741,102 @@ function autoScrollLogs() {
             } catch (error) {console.error("Error fetching entity data:", error);throw error;}
         }
 
+        document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
+            const entitySelect = document.getElementById("entitySelect");
+            const selectedEntity = entitySelect.value;
+            const logsContainer = document.getElementById("logsContainer");
 
-document.getElementById("fetchEntityBtn").addEventListener("click", async () => {
-    const entitySelect = document.getElementById("entitySelect");
-    const selectedEntity = entitySelect.value;
-    const logsContainer = document.getElementById("logsContainer");
+            if (!selectedEntity) {
+                alert("Please select an entity.");
+                return;
+            }
+            showLoadingSpinner();
+            logsContainer.innerHTML = "";
+            logsContainer.style.display = "block";
+            logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Fetching data for entity: ${selectedEntity}...</p>`;
+            autoScrollLogs();
+            try {
+                // Real-time progress tracking for fetching data
+                document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}...`;
+                document.getElementById("fetchingProgress").style.width = "0%";
+                const eventSource = new EventSource(`/stream-progress?entity_name=${selectedEntity}`);
+                eventSource.onmessage = function (event) {
+                    const progress = parseInt(event.data);
+                    document.getElementById("fetchingProgress").style.width = `${progress}%`;
+                    document.getElementById("fetchingMessage").textContent = `Fetching ${selectedEntity}... ${progress}%`;
+                    if (progress === 100) {
+                        eventSource.close();
+                        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> Data fetched successfully for ${selectedEntity}.</p>`;
+                        autoScrollLogs();
+                        fetchTotalRows(selectedEntity);
+                        setTimeout(() => {
+                            document.getElementById("fetchingProgress").style.width = "0%";
+                            document.getElementById("fetchingMessage").textContent = "Not Started";
+                        }, 1000);
+                    }
+                };
 
-    if (!selectedEntity) {
-        alert("Please select an entity.");
-        return;
-    }
+                // Step 1: Fetch & save entity data
+                const fetchResponse = await fetch(`/fetch-and-save-entity?entity_name=${selectedEntity}`, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                });
 
-    showLoadingSpinner();
-    logsContainer.innerHTML = "";
-    logsContainer.style.display = "block";
-    logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Starting data processing for ${selectedEntity}...</p>`;
-    autoScrollLogs();
+                if (!fetchResponse.ok) throw new Error("Failed to fetch entity data");
 
-    try {
-        // Initialize progress tracking
-        document.getElementById("fetchingMessage").textContent = `Processing ${selectedEntity}...`;
-        document.getElementById("fetchingProgress").style.width = "0%";
-
-        // Start progress monitoring via EventSource
-        const eventSource = new EventSource(`/stream-progress?entity_name=${selectedEntity}`);
-        
-        eventSource.onmessage = function(event) {
-            const progressData = JSON.parse(event.data);
-            
-            if (progressData.status === 'progress') {
-                // Update progress bar
-                const progress = parseInt(progressData.percentage);
-                document.getElementById("fetchingProgress").style.width = `${progress}%`;
-                document.getElementById("fetchingMessage").textContent = `Processing ${selectedEntity}... ${progress}%`;
-                
-                // Update logs with progress details
-                if (progressData.message) {
-                    logsContainer.innerHTML += `<p><i class="fas fa-sync-alt fa-spin"></i> ${progressData.message}</p>`;
+                const fetchData = await fetchResponse.json();
+                if (fetchData.success) {
+                    logsContainer.innerHTML += `<p><i class="fas fa-list"></i> Entity Columns:</p>`;
+                    // Check if columns exist and is an array before joining
+                    if (fetchData.columns && Array.isArray(fetchData.columns)) {
+                        logsContainer.innerHTML += `<pre>${fetchData.columns.join("\n")}</pre>`;
+                    } else {
+                        logsContainer.innerHTML += `<pre>No columns information available</pre>`;
+                    }
                     autoScrollLogs();
                 }
-            }
-            else if (progressData.status === 'complete') {
-                // Final completion
-                eventSource.close();
-                document.getElementById("fetchingProgress").style.width = "100%";
-                document.getElementById("fetchingMessage").textContent = `Completed processing ${selectedEntity}`;
-                
-                logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> ${progressData.message || 'Processing completed successfully'}</p>`;
-                autoScrollLogs();
-                
-                // Update total rows count
-                fetchTotalRows(selectedEntity);
-                
-                // Reset progress after delay
-                setTimeout(() => {
-                    document.getElementById("fetchingProgress").style.width = "0%";
-                    document.getElementById("fetchingMessage").textContent = "Ready";
-                }, 2000);
-            }
-            else if (progressData.status === 'error') {
-                // Handle errors
-                eventSource.close();
-                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Error: ${progressData.message}</p>`;
-                autoScrollLogs();
-                throw new Error(progressData.message);
-            }
-        };
 
-        eventSource.onerror = function() {
-            logsContainer.innerHTML += `<p><i class="fas fa-exclamation-triangle"></i> Progress monitoring disconnected</p>`;
-            autoScrollLogs();
-            eventSource.close();
-        };
+                // Step 2: Fetch & export entity data (only after fetch-and-save is successful)
+                logsContainer.innerHTML += `<p><i class="fas fa-info-circle"></i> Exporting data for entity: ${selectedEntity}...</p>`;
+                autoScrollLogs();
 
-        // Initiate the fetch and save process
-        const fetchResponse = await fetch(`/fetch-and-save-entity?entity_name=${selectedEntity}`, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${accessToken}`,
-                "Content-Type": "application/json",
-            },
+                const exportResponse = await fetch("/fetch-and-export/", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${accessToken}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ entity_name: selectedEntity }),
+                });
+
+                if (!exportResponse.ok) throw new Error("Failed to export entity data");
+
+                const exportData = await exportResponse.json();
+                if (exportData.success) {
+                    // Update the Excel download link
+                    if (exportData.excel_file_url) {
+                        const excelLink = document.getElementById("excelLink");
+                        excelLink.href = exportData.excel_file_url;
+                    }
+                    document.getElementById("excelDownload").style.display = "block";
+
+                    autoScrollLogs();
+                } else {
+                    throw new Error(`Failed to export data for ${selectedEntity}`);
+                }
+
+            } catch (error) {
+                logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Error: ${error.message}</p>`;
+                autoScrollLogs();
+            } finally {
+                hideLoadingSpinner();
+            }
         });
 
-        if (!fetchResponse.ok) {
-            const errorData = await fetchResponse.json();
-            throw new Error(errorData.detail || "Failed to start processing");
-        }
-
-        // The backend returns 202 Accepted for background processing
-        const responseData = await fetchResponse.json();
-        logsContainer.innerHTML += `<p><i class="fas fa-check-circle"></i> ${responseData.message}</p>`;
-        autoScrollLogs();
-
-        // The actual processing continues in the background via EventSource
-
-    } catch (error) {
-        logsContainer.innerHTML += `<p><i class="fas fa-times-circle"></i> Error: ${error.message}</p>`;
-        autoScrollLogs();
-        console.error("Processing error:", error);
-    } finally {
-        hideLoadingSpinner();
-    }
-});
-
-
+                
             let clickCount = 0;
             let clickCount2 = 0;
             let clickCount3 = 0;

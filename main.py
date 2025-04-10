@@ -21,7 +21,7 @@ from urllib.parse import quote
 from fastapi.responses import FileResponse
 import time
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Table, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, MetaData, Table, Float, JSON, and_
 from sqlalchemy.dialects.postgresql import JSONB
 from fastapi.responses import StreamingResponse
 from sqlalchemy.exc import SQLAlchemyError
@@ -286,33 +286,90 @@ def insert_entity_data(table_name: str, records: List[Dict]) -> int:
             metadata = MetaData()
             table = Table(table_name, metadata, autoload_with=session.bind)
             
-            # Prepare data for insertion
+            # Prepare data for insertion or update
             validated_records = []
+            table_column_names = set(col.name for col in table.columns)
+
             for record in records:
                 processed_record = {}
-                for column in table.columns:
-                    col_name = column.name
-                    # Set NULL for missing required fields (except primary key)
-                    if col_name not in record and not column.primary_key:
-                        processed_record[col_name] = None
+                for col_name in table_column_names:
+                    column = table.columns[col_name]
+                    
+                    # Handle nested structures by converting to JSON string
+                    if col_name in record and isinstance(record[col_name], (dict, list)):
+                        processed_record[col_name] = json.dumps(record[col_name])
+                    elif col_name in record:
+                        processed_record[col_name] = record[col_name]
                     else:
-                        processed_record[col_name] = record.get(col_name)
+                        # If it's a nullable column, set it to None
+                        if column.nullable:
+                            processed_record[col_name] = None
+                        elif not column.primary_key:
+                            # For non-nullable and non-primary key columns, set to a default value
+                            processed_record[col_name] = None  # or use a default value if needed
+
                 validated_records.append(processed_record)
 
-            # Execute bulk insert
-            stmt = table.insert().values(validated_records)
-            result = session.execute(stmt)
+            # Get primary key columns
+            primary_key_columns = [col.name for col in table.primary_key.columns]
+
+            # Iterate over records and perform upsert
+            updated_count = 0
+            inserted_count = 0
+            for record in validated_records:
+                # Check if the record already exists
+                if not primary_key_columns:
+                    # If no primary key, always insert
+                    stmt = table.insert().values(record)
+                    session.execute(stmt)
+                    inserted_count += 1
+                    continue
+                    
+                # Build filter condition for primary keys
+                filter_conditions = []
+                for pk_col in primary_key_columns:
+                    if pk_col in record:
+                        filter_conditions.append(getattr(table.c, pk_col) == record[pk_col])
+                
+                if not filter_conditions:
+                    # If no PK values provided, insert
+                    stmt = table.insert().values(record)
+                    session.execute(stmt)
+                    inserted_count += 1
+                    continue
+                
+                # Check if record exists
+                existing = session.execute(
+                    table.select().where(and_(*filter_conditions)))
+                existing_record = existing.first()
+
+                if existing_record:
+                    # Update existing record
+                    stmt = (
+                        table.update()
+                        .where(and_(*filter_conditions))
+                        .values(record))
+                    session.execute(stmt)
+                    updated_count += 1
+                else:
+                    # Insert new record
+                    stmt = table.insert().values(record)
+                    session.execute(stmt)
+                    inserted_count += 1
+
             session.commit()
-            return len(validated_records)
+            return inserted_count + updated_count
 
     except SQLAlchemyError as e:
-        logger.error(f"Database insertion error: {str(e)}")
-        session.rollback()
+        logger.error(f"Database upsert error: {str(e)}")
+        if 'session' in locals():
+            session.rollback()
         raise HTTPException(
             status_code=500,
-            detail=f"Data insertion failed: {str(e)}"
+            detail=f"Data insertion or update failed: {str(e)}"
         )
-    
+                
+            
 @app.post("/fetch-and-save-entity")
 async def fetch_and_save_entity(
     entity_name: str, 
@@ -421,11 +478,17 @@ async def fetch_and_save_entity(
         )
 
         try:
+
+            # Ensure create_table_for_entity returns proper columns
             created_columns = create_table_for_entity(
                 entity_name=table_name,
                 sample_record=first_record
             )
             
+            # Convert columns to a list if it's not already
+            if not isinstance(created_columns, list):
+                created_columns = list(created_columns) if created_columns else []
+
             inserted_count = insert_entity_data(
                 table_name=table_name,
                 records=records
@@ -443,7 +506,7 @@ async def fetch_and_save_entity(
                 message=f"Entity {entity_name} processed successfully",
                 data={
                     "table_name": table_name,
-                    "columns": created_columns,
+                    "columns": created_columns or [],
                     "sample_data": first_record,
                     "inserted_count": inserted_count
                 },
@@ -844,13 +907,15 @@ class ExportRequest(BaseModel):
 
 @app.post("/fetch-and-export_all_entities/")
 def fetch_and_export_entity_data(
-    request: ExportRequest,  # Use the Pydantic model for request validation
+    request: ExportRequest,
     background_tasks: BackgroundTasks = None,
+    db: Session = Depends(get_db),
 ):
     try:
         access_token = request.access_token
         all_data = {}
 
+        # Loop through all the entities
         for entity in IMPOWER_ENTITIES:
             logger.info(f"Fetching data for entity: {entity}")
             data = fetch_single_entity_data(access_token, entity)
@@ -859,64 +924,76 @@ def fetch_and_export_entity_data(
                 for record in data:
                     anonymized_record = {}
                     for field_name, field_value in record.items():
-                        # Check if the field name is in the list of fields to anonymize
-                        if field_name.lower() in ['name', 'lastname', 'firstname', 'fullname', 'email', 'phone', 'phonenumber']:
+                        # Handle nested structures first
+                        if isinstance(field_value, (dict, list)):
+                            # Convert nested structures to JSON strings
+                            anonymized_record[field_name] = json.dumps(field_value, ensure_ascii=False)
+                        elif field_name.lower() in ['name', 'lastname', 'firstname', 'fullname', 'email', 'phone', 'phonenumber']:
                             anonymized_record[field_name] = anonymize_data(str(field_value), field_name.lower())
                         else:
-                            anonymized_record[field_name] = field_value  # Keep the original value
+                            anonymized_record[field_name] = field_value
                     anonymized_records.append(anonymized_record)
                 all_data[entity] = anonymized_records
             else:
-                # If no data, infer the schema from a sample record
-                logger.info(f"No data found for entity {entity}. Inferring schema.")
-                sample_record = {"id": 1, "name": "default", "created_at": datetime.now()}  # Example default columns
-                schema = infer_schema_from_record(sample_record)
-                if schema:
-                    all_data[entity] = [create_sample_record(schema)]
-                else:
-                    all_data[entity] = []
+                logger.info(f"No data found for entity {entity}. Creating empty sheet.")
+                all_data[entity] = []
 
-        # Export data to Excel
+        # Export the data to Excel with proper handling of complex types
         excel_file_path = export_all_entities_to_excel(all_data, "impower_export")
+
         if background_tasks:
             background_tasks.add_task(delete_file_after_delay, excel_file_path, delay=60)
-        logger.info(f"Data exported to Excel file: {excel_file_path}")
 
         return {
             "success": True,
-            "columns": list(all_data.keys()) if all_data else [],
+            "columns": list(all_data.keys()),
             "total_records": sum(len(data) for data in all_data.values()),
             "excel_file_url": f"/download-excel/{os.path.basename(excel_file_path)}"
         }
-    except Exception as e:
-        logger.error(f"Failed to export data to Excel: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
     
+    except Exception as e:
+        logger.error(f"Failed to export data to Excel: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to export data to Excel: {str(e)}"
+        )
+
 
 def export_all_entities_to_excel(data: Dict[str, List[Dict[str, Any]]], entity_name: str) -> str:
+    """Export data to Excel with proper handling of complex types"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    excel_file_path = f"{entity_name}_export_{timestamp}.xlsx"
+    
     try:
-        # Create a Pandas Excel writer
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        excel_file_path = f"{entity_name}_export_{timestamp}.xlsx"
         with pd.ExcelWriter(excel_file_path, engine="openpyxl") as writer:
             for entity, records in data.items():
                 if records:
+                    # Create DataFrame with all records
                     df = pd.DataFrame(records)
-                    df.to_excel(writer, sheet_name=entity, index=False)
+                    
+                    # Ensure all columns are present (handle case where some records have missing fields)
+                    all_columns = set()
+                    for record in records:
+                        all_columns.update(record.keys())
+                    
+                    # Reindex DataFrame to include all possible columns
+                    df = df.reindex(columns=list(all_columns))
+                    
+                    # Write to Excel
+                    df.to_excel(writer, sheet_name=entity[:31], index=False)  # Sheet name max 31 chars
                 else:
-                    # If no data, create an empty DataFrame with the schema as headers
-                    sample_record = {"id": 1, "name": "default", "created_at": datetime.now()}  # Example default columns
-                    schema = infer_schema_from_record(sample_record)
-                    if schema:
-                        df = pd.DataFrame(columns=[col.name for col in schema])
-                        df.to_excel(writer, sheet_name=entity, index=False)
-        logger.info(f"Data exported to Excel file: {excel_file_path}")
+                    # Create empty DataFrame with sample columns if no data exists
+                    empty_df = pd.DataFrame(columns=["id", "name", "created_at"])
+                    empty_df.to_excel(writer, sheet_name=entity[:31], index=False)
+        
         return excel_file_path
+        
     except Exception as e:
-        logger.error(f"Error exporting data to Excel: {str(e)}")
-        raise
-
-
+        # Clean up partially created file if error occurs
+        if os.path.exists(excel_file_path):
+            os.remove(excel_file_path)
+        raise RuntimeError(f"Excel export failed: {str(e)}")
+    
 @app.post("/fetch-and-export/")
 def fetch_and_export_entity_data(
     request: ExportEntityRequest,  # Use the Pydantic model for request validation
@@ -945,14 +1022,12 @@ def fetch_and_export_entity_data(
         logger.error(f"Failed to export data to Excel: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to export data to Excel.")
 
-@app.post("/fetch-entity-fields")
-async def fetch_entity_fields(
-    entity_name: str, 
+@app.get("/fetch-entity-fields")
+async def get_entity_fields(
+    entity_name: str,
     authorization: str = Header(None),
     page: int = 1,
-    size: int = 1,
-    sort: str = "name",
-    order: str = "ASC"
+    size: int = 1
 ):
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -960,60 +1035,51 @@ async def fetch_entity_fields(
     access_token = authorization.split("Bearer ")[1]
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "accept": "application/json"
+        "Accept": "application/json"
     }
 
-    params = {
-        "page": page,
-        "size": size,
-        "sort": sort,
-        "order": order.upper()
-    }
-
+    params = {"page": page, "size": size}
+    
     try:
-        # Try both endpoint variations
-        for endpoint in [f"{API_URL}/{entity_name}", f"{API_URL}/api/{entity_name}"]:
-            response = requests.get(
-                endpoint,
-                headers=headers,
-                params=params
-            )
-            if response.status_code == 200:
-                entity_data = response.json().get("items", [])
-                if not entity_data:
-                    return {
-                        "success": False, 
-                        "message": f"No data found for entity {entity_name}",
-                        "columns": []
-                    }
-
-                # Extract field names from the first record
-                sample_record = entity_data[0]
-                columns = [col.lower() for col in sample_record.keys()]
-                
-                return {
-                    "success": True,
-                    "columns": columns,
-                    "sort_field": sort,
-                    "sort_order": order,
-                    "page_info": {
-                        "current_page": page,
-                        "page_size": size
-                    }
-                }
-
+        response = requests.get(
+            f"{API_URL}/{entity_name}",
+            headers=headers,
+            params=params
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            content = data.get("content", data.get("items", []))
+            
+            if not content:
+                return JSONResponse(
+                    status_code=404,
+                    content={"success": False, "message": "No data found", "columns": []}
+                )
+            
+            sample_record = content[0]
+            if isinstance(sample_record, dict) and len(sample_record) == 1:
+                sample_record = next(iter(sample_record.values()))
+            
+            columns = list(sample_record.keys()) if isinstance(sample_record, dict) else []
+            
+            return {
+                "success": True,
+                "columns": [col.lower() for col in columns],
+                "sample_record": sample_record
+            }
+            
         raise HTTPException(
             status_code=response.status_code,
-            detail=f"Failed to fetch entity data: {response.text}"
+            detail=response.text[:200]
         )
-
-    except HTTPException:
-        raise
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error fetching entity fields: {str(e)}"
-        )
+            detail=str(e)
+        )    
+
     
 def fetch_all_entity_data_from_staging(db: Session, entity_name: str) -> list:
     logger.info(f"Fetching all data from staging for entity: {entity_name}")
